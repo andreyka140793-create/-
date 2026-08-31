@@ -206,10 +206,23 @@ export default class GameScene extends Phaser.Scene {
     this.updateHpUI();
     this.triggerHaptic('error');
 
-    if (this.hp <= 0) {
-      this.scene.restart();
-    } else {
-      this.makeInvulnerable(1500);
+    // При поражении (в handlePlayerEnemyCollision и при падении в яму):
+  if (this.hp <= 0) {
+    this.scene.start('GameOverScene', { score: this.score, win: false });
+  }
+
+  // При победе над боссом (в attack):
+  if (boss.hp <= 0) {
+    boss.destroy();
+    this.time.delayedCall(1000, () => {
+      this.scene.start('GameOverScene', { score: this.score + 500, win: true });
+    });
+  }
+
+  // При падении в яму (в update):
+  if (this.player.y > 710) {
+    this.scene.start('GameOverScene', { score: this.score, win: false });
+  }
     }
   }
 
