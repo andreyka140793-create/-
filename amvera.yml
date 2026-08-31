@@ -1,0 +1,9 @@
+meta:
+  environment: node
+  tool: npm
+
+build:
+  command: npm run build
+
+run:
+  command: npx serve -s dist -l 80
