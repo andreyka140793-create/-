@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import BootScene from './scenes/BootScene';
+import MenuScene from './scenes/MenuScene';
 import GameScene from './scenes/GameScene';
+import GameOverScene from './scenes/GameOverScene';
 
-// Инициализация Telegram WebApp
 const tg = window.Telegram?.WebApp;
 if (tg) {
   tg.ready();
@@ -28,7 +29,7 @@ const config = {
       debug: false
     }
   },
-  scene: [BootScene, GameScene]
+  scene: [BootScene, MenuScene, GameScene, GameOverScene]
 };
 
 export default new Phaser.Game(config);
