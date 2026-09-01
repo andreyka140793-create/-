@@ -6,9 +6,13 @@ export default class GameScene extends Phaser.Scene {
     super({ key: 'GameScene' });
   }
 
-  init() {
-    this.score = 0;
-    this.hp = 3;
+  init(data = {}) {
+    // Поддержка продолжения после «Продолжить за Stars»
+    this.score = data.score || 0;
+    this.hp = data.hp || 3;
+    this.startX = data.startX || 120;
+    this.isContinue = !!data.continue;
+
     this.hasShield = false;
     this.isAttacking = false;
     this.isInvulnerable = false;
@@ -104,7 +108,7 @@ export default class GameScene extends Phaser.Scene {
     this.platforms.create(3800, 500, 'tile_pipe').setScale(2, 1).refreshBody();
 
     // ===== ИГРОК =====
-    this.player = this.physics.add.sprite(120, 500, 'sanych');
+    this.player = this.physics.add.sprite(this.startX || 120, 500, 'sanych');
     this.player.setBounce(0.05);
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(10);
@@ -230,11 +234,16 @@ export default class GameScene extends Phaser.Scene {
     // ===== HUD =====
     const hudStyle = { fontSize: '24px', fontStyle: 'bold', stroke: '#000', strokeThickness: 4 };
 
-    this.hudScore = this.add.text(16, 14, 'Гайки: 0', { ...hudStyle, fill: '#ffd54f' }).setScrollFactor(0).setDepth(100);
+    this.hudScore = this.add.text(16, 14, `Гайки: ${this.score}`, { ...hudStyle, fill: '#ffd54f' }).setScrollFactor(0).setDepth(100);
     this.hudHp = this.add.text(16, 48, '❤️❤️❤️', { ...hudStyle, fill: '#ff1744', fontSize: '28px' }).setScrollFactor(0).setDepth(100);
     this.hudShield = this.add.text(16, 86, '', { ...hudStyle, fill: '#42a5f5', fontSize: '20px' }).setScrollFactor(0).setDepth(100);
     this.hudZone = this.add.text(16, 116, 'Зона: Двор', { ...hudStyle, fill: '#b0bec5', fontSize: '18px' }).setScrollFactor(0).setDepth(100);
     this.hudBoss = this.add.text(16, 146, '', { ...hudStyle, fill: '#00e676', fontSize: '20px' }).setScrollFactor(0).setDepth(100);
+
+    this.updateHpUI();
+    if (this.isContinue) {
+      this.makeInvulnerable(2000);
+    }
 
     // ===== УПРАВЛЕНИЕ =====
     this.cursors = this.input.keyboard.createCursorKeys();
@@ -407,7 +416,7 @@ export default class GameScene extends Phaser.Scene {
 
     if (this.hp <= 0) {
       this.time.delayedCall(250, () => {
-        this.scene.start('GameOverScene', { score: this.score, win: false });
+        this.scene.start('GameOverScene', { score: this.score, win: false, checkpointX: Math.max(120, this.player.x - 100) });
       });
     }
   }

@@ -9,78 +9,217 @@ export default class GameOverScene extends Phaser.Scene {
   init(data) {
     this.finalScore = data.score || 0;
     this.isWin = data.win || false;
+    // Можно передать checkpointX для продолжения с места падения
+    this.checkpointX = data.checkpointX || 120;
   }
 
   create() {
     const { width, height } = this.scale;
 
-    // Звук победы / поражения
     if (this.isWin) SFX.win();
     else SFX.lose();
 
-    this.add.rectangle(width / 2, height / 2, width, height, this.isWin ? 0x1b5e20 : 0xb71c1c);
+    // Фон
+    const bgColor = this.isWin ? 0x1b5e20 : 0x4a148c;
+    this.add.rectangle(width / 2, height / 2, width, height, bgColor);
 
-    const titleText = this.isWin ? 'ПОБЕДА! ТРУБА ПОЧИНЕНА!' : 'АВАРИЯ! ТРУБУ ПРОРВАЛО!';
-    this.add.text(width / 2, 180, titleText, {
-      fontSize: '42px',
-      fill: '#ffffff',
+    // Лёгкий градиентный оверлей (два полупрозрачных прямоугольника)
+    this.add.rectangle(width / 2, 0, width, 180, 0x000000, 0.25).setOrigin(0.5, 0);
+    this.add.rectangle(width / 2, height, width, 200, 0x000000, 0.3).setOrigin(0.5, 1);
+
+    // --- Заголовок ---
+    const title = this.isWin ? 'ПОБЕДА!' : 'АВАРИЯ!';
+    const subtitle = this.isWin ? 'Труба починена. Порядок наведён.' : 'Трубу прорвало. ЖЭК в панике.';
+
+    this.add.text(width / 2, 110, title, {
+      fontSize: '56px',
+      fill: this.isWin ? '#69f0ae' : '#ff8a80',
       fontStyle: 'bold',
       stroke: '#000000',
-      strokeThickness: 6
+      strokeThickness: 8
     }).setOrigin(0.5);
 
-    this.add.text(width / 2, 270, `Собрано гаек: ${this.finalScore}`, {
+    this.add.text(width / 2, 175, subtitle, {
+      fontSize: '22px',
+      fill: '#eceff1',
+      stroke: '#000000',
+      strokeThickness: 3
+    }).setOrigin(0.5);
+
+    // --- Счёт ---
+    const scoreBox = this.add.rectangle(width / 2, 260, 340, 70, 0x000000, 0.35);
+    this.add.text(width / 2, 248, 'Собрано гаек', {
+      fontSize: '16px',
+      fill: '#b0bec5'
+    }).setOrigin(0.5);
+
+    this.add.text(width / 2, 278, `${this.finalScore}`, {
       fontSize: '36px',
       fill: '#ffd54f',
       fontStyle: 'bold'
     }).setOrigin(0.5);
 
-    this.saveHighScore(this.finalScore);
-
-    // Кнопка Заново
-    const btnRestart = this.add.rectangle(width / 2, 400, 300, 70, 0xffb300)
-      .setInteractive({ useHandCursor: true });
-
-    this.add.text(width / 2, 400, 'ИГРАТЬ СНОВА', {
-      fontSize: '28px',
-      fill: '#000000',
-      fontStyle: 'bold'
+    // Рекорд
+    this.recordText = this.add.text(width / 2, 320, '', {
+      fontSize: '18px',
+      fill: '#80cbc4'
     }).setOrigin(0.5);
 
-    // Кнопка Меню
-    const btnMenu = this.add.rectangle(width / 2, 500, 300, 60, 0x37474f)
-      .setInteractive({ useHandCursor: true });
+    this.saveAndShowRecord(this.finalScore);
 
-    this.add.text(width / 2, 500, 'В ГЛАВНОЕ МЕНЮ', {
-      fontSize: '24px',
-      fill: '#ffffff'
-    }).setOrigin(0.5);
+    // ========== КНОПКИ ==========
+    const btnY = this.isWin ? 400 : 390;
 
-    btnRestart.on('pointerdown', () => {
+    // 1. Играть снова
+    this.makeButton(width / 2, btnY, 320, 64, 0xffb300, '#000000', 'ИГРАТЬ СНОВА', () => {
       SFX.click();
       this.scene.start('GameScene');
     });
 
-    btnMenu.on('pointerdown', () => {
+    // 2. Только при поражении — Продолжить за Stars
+    if (!this.isWin) {
+      this.makeButton(width / 2, btnY + 80, 320, 64, 0x7c4dff, '#ffffff', '⭐ ПРОДОЛЖИТЬ ЗА 15', () => {
+        this.tryContinueWithStars();
+      });
+
+      this.starsHint = this.add.text(width / 2, btnY + 130, 'Восстановит 1 жизнь и продолжит уровень', {
+        fontSize: '14px',
+        fill: '#b39ddb'
+      }).setOrigin(0.5);
+    }
+
+    // 3. В меню
+    const menuY = this.isWin ? btnY + 80 : btnY + 170;
+    this.makeButton(width / 2, menuY, 280, 52, 0x37474f, '#ffffff', 'В ГЛАВНОЕ МЕНЮ', () => {
       SFX.click();
       this.scene.start('MenuScene');
+    }, 22);
+
+    // Подсказка про Stars (для разработчика / MVP)
+    if (!this.isWin) {
+      this.add.text(width / 2, height - 28, 'Полная оплата Stars подключается через бота (Bot API)', {
+        fontSize: '12px',
+        fill: '#78909c'
+      }).setOrigin(0.5);
+    }
+  }
+
+  makeButton(x, y, w, h, color, textColor, label, onClick, fontSize = 26) {
+    const bg = this.add.rectangle(x, y, w, h, color)
+      .setInteractive({ useHandCursor: true })
+      .setStrokeStyle(2, 0xffffff, 0.15);
+
+    const txt = this.add.text(x, y, label, {
+      fontSize: `${fontSize}px`,
+      fill: textColor,
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+
+    bg.on('pointerover', () => bg.setScale(1.03));
+    bg.on('pointerout', () => bg.setScale(1));
+    bg.on('pointerdown', onClick);
+
+    return { bg, txt };
+  }
+
+  tryContinueWithStars() {
+    SFX.click();
+
+    const tg = window.Telegram?.WebApp;
+
+    // --- Реальная оплата Stars (когда будет invoice-ссылка от бота) ---
+    // Раскомментируй и подставь ссылку, когда настроишь бота:
+    //
+    // if (tg?.openInvoice) {
+    //   tg.openInvoice('https://t.me/$YOUR_BOT/invoice_link', (status) => {
+    //     if (status === 'paid') {
+    //       this.doContinue();
+    //     }
+    //   });
+    //   return;
+    // }
+
+    // --- MVP / демо: локальные «звёзды» ---
+    let localStars = parseInt(localStorage.getItem('sanych_stars') || '30', 10);
+
+    if (localStars >= 15) {
+      localStars -= 15;
+      localStorage.setItem('sanych_stars', String(localStars));
+      this.showToast(`Списано 15 ⭐  Осталось: ${localStars}`);
+      this.time.delayedCall(500, () => this.doContinue());
+    } else {
+      // Для удобства тестирования — один раз даём «в долг»
+      const usedFree = localStorage.getItem('sanych_free_continue') === '1';
+      if (!usedFree) {
+        localStorage.setItem('sanych_free_continue', '1');
+        this.showToast('Демо: бесплатное продолжение (1 раз)');
+        this.time.delayedCall(500, () => this.doContinue());
+      } else {
+        this.showToast('Недостаточно Stars. Для теста: localStorage sanych_stars = 50');
+        // В реальном приложении здесь открывался бы инвойс
+        if (tg?.showAlert) {
+          tg.showAlert('Недостаточно Stars. Оплата через бота пока не подключена.');
+        }
+      }
+    }
+  }
+
+  doContinue() {
+    // Продолжаем игру с 1 HP и сохранённым счётом
+    this.scene.start('GameScene', {
+      continue: true,
+      score: this.finalScore,
+      hp: 1,
+      startX: this.checkpointX
     });
   }
 
-  saveHighScore(score) {
+  showToast(msg) {
+    const { width, height } = this.scale;
+    const toast = this.add.text(width / 2, height - 80, msg, {
+      fontSize: '18px',
+      fill: '#ffffff',
+      backgroundColor: '#000000aa',
+      padding: { x: 16, y: 10 }
+    }).setOrigin(0.5).setDepth(200);
+
+    this.tweens.add({
+      targets: toast,
+      alpha: 0,
+      y: height - 110,
+      duration: 2200,
+      ease: 'Power2',
+      onComplete: () => toast.destroy()
+    });
+  }
+
+  saveAndShowRecord(score) {
     const tg = window.Telegram?.WebApp;
+    const key = 'sanych_highscore';
+
+    const apply = (record) => {
+      const isNew = score > record;
+      if (isNew) {
+        this.recordText.setText(`🏆 Новый рекорд! Было: ${record}`);
+        this.recordText.setColor('#ffd54f');
+      } else {
+        this.recordText.setText(`Рекорд: ${record} гаек`);
+      }
+    };
 
     if (tg?.CloudStorage) {
-      tg.CloudStorage.getItem('sanych_highscore', (err, value) => {
-        const currentRecord = parseInt(value || '0', 10);
-        if (score > currentRecord) {
-          tg.CloudStorage.setItem('sanych_highscore', score.toString());
+      tg.CloudStorage.getItem(key, (err, value) => {
+        const current = parseInt(value || '0', 10);
+        apply(current);
+        if (score > current) {
+          tg.CloudStorage.setItem(key, String(score));
         }
       });
     } else {
-      const currentRecord = parseInt(localStorage.getItem('sanych_highscore') || '0', 10);
-      if (score > currentRecord) {
-        localStorage.setItem('sanych_highscore', score.toString());
+      const current = parseInt(localStorage.getItem(key) || '0', 10);
+      apply(current);
+      if (score > current) {
+        localStorage.setItem(key, String(score));
       }
     }
   }
