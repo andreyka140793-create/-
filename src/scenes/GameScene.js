@@ -13,120 +13,228 @@ export default class GameScene extends Phaser.Scene {
     this.isInvulnerable = false;
     this.facing = 'right';
     this.bossDefeated = false;
+    this.zone = 1;
   }
 
   create() {
-    const mapWidth = 3600;
+    const mapWidth = 4200;
     const mapHeight = 720;
 
     this.physics.world.setBounds(0, 0, mapWidth, mapHeight);
 
-    // 1. Поверхности и платформы
+    // ===== ФОН по зонам (цвет неба) =====
+    this.cameras.main.setBackgroundColor('#1a237e');
+
+    // ===== ПЛАТФОРМЫ =====
     this.platforms = this.physics.add.staticGroup();
+
+    // Основная земля с ямами
     for (let x = 0; x < mapWidth; x += 64) {
-      // Ямы
-      if ((x > 900 && x < 1100) || (x > 2200 && x < 2400)) continue;
+      // Ямы: двор→подъезд, лестница, перед боссом
+      if ((x >= 880 && x < 1080) || (x >= 1980 && x < 2140) || (x >= 3100 && x < 3260)) continue;
       this.platforms.create(x + 32, 688, 'tile_ground');
     }
 
-    // Подвесные мостки и трубы
+    // --- Зона 1: Двор (0–900) ---
+    // Лавочка (декор)
+    this.add.image(220, 640, 'deco_bench').setDepth(1);
+    // Качели-платформа (движущаяся)
+    this.swing = this.physics.add.image(420, 480, 'deco_swing');
+    this.swing.body.setAllowGravity(false);
+    this.swing.body.setImmovable(true);
+    this.swing.setData('baseY', 480);
+    
+
+    // Платформы двора
     [
-      { x: 500, y: 520 }, { x: 750, y: 380 }, { x: 1300, y: 500 },
-      { x: 1600, y: 360 }, { x: 1900, y: 480 }, { x: 2600, y: 520 },
-      { x: 2900, y: 400 }, { x: 3100, y: 300 }
+      { x: 350, y: 520 }, { x: 550, y: 420 }, { x: 750, y: 340 }
     ].forEach(p => {
-      this.platforms.create(p.x, p.y, 'tile_ground').setScale(1.8, 0.4).refreshBody();
+      this.platforms.create(p.x, p.y, 'tile_pipe').setScale(1.5, 1).refreshBody();
     });
 
-    // 2. Игрок (Саныч)
-    this.player = this.physics.add.sprite(100, 500, 'sanych');
+    // --- Зона 2: Подъезд (900–1800) ---
+    // Разбитые ступени
+    [
+      { x: 1150, y: 600 }, { x: 1250, y: 520 }, { x: 1350, y: 440 },
+      { x: 1450, y: 360 }, { x: 1550, y: 440 }, { x: 1650, y: 520 }
+    ].forEach(p => {
+      this.platforms.create(p.x, p.y, 'tile_brick').setScale(1.2, 1).refreshBody();
+    });
+
+    // --- Зона 3: Лестничная клетка (1800–2600) ---
+    // Лифтовые платформы (движущиеся)
+    this.elevators = [];
+    [
+      { x: 1900, y: 500, range: 120 },
+      { x: 2200, y: 380, range: 160 },
+      { x: 2450, y: 450, amp: 100 }
+    ].forEach((e, i) => {
+      const elev = this.physics.add.image(e.x, e.y, 'tile_pipe');
+      elev.setScale(1.8, 1);
+      elev.body.setAllowGravity(false);
+      elev.body.setImmovable(true);
+      elev.refreshBody();
+      elev.setData('baseY', e.y);
+      elev.setData('amp', e.amp);
+      elev.setData('speed', 0.0012 + i * 0.0003);
+      elev.setData('phase', i * 1.5);
+      this.elevators.push(elev);
+      
+    });
+
+    // Статичные платформы лестницы
+    [
+      { x: 2050, y: 280 }, { x: 2350, y: 220 }
+    ].forEach(p => {
+      this.platforms.create(p.x, p.y, 'tile_brick').setScale(1.3, 1).refreshBody();
+    });
+
+    // --- Зона 4: Квартира с протечкой (2600–3400) ---
+    [
+      { x: 2700, y: 520 }, { x: 2850, y: 400 }, { x: 3000, y: 320 },
+      { x: 2950, y: 520 }
+    ].forEach(p => {
+      this.platforms.create(p.x, p.y, 'tile_pipe').setScale(1.4, 1).refreshBody();
+    });
+
+    // --- Зона 5: Босс (3400+) ---
+    this.platforms.create(3550, 600, 'tile_ground').setScale(3, 1).refreshBody();
+    this.platforms.create(3800, 500, 'tile_pipe').setScale(2, 1).refreshBody();
+
+    // ===== ИГРОК =====
+    this.player = this.physics.add.sprite(120, 500, 'sanych');
     this.player.setBounce(0.05);
     this.player.setCollideWorldBounds(true);
+    this.player.setDepth(10);
     this.physics.add.collider(this.player, this.platforms);
 
-    // 3. Предметы
-    this.nuts = this.physics.add.group();
-    for (let x = 300; x < 3000; x += 150) {
-      const nut = this.nuts.create(x, 200 + Math.random() * 150, 'nut');
-      nut.setBounceY(0.4);
+    // Коллизии с лифтами (после создания игрока)
+    this.elevators.forEach(elev => {
+      this.physics.add.collider(this.player, elev);
+    });
+
+    // Качели — отдельная коллизия
+    if (this.swing) {
+      this.physics.add.collider(this.player, this.swing);
     }
+
+    // ===== ПРЕДМЕТЫ =====
+    this.nuts = this.physics.add.group();
+    const nutPositions = [
+      280, 400, 520, 680, 900, 1200, 1400, 1600, 1850, 2100,
+      2300, 2550, 2750, 2900, 3050, 3400, 3600
+    ];
+    nutPositions.forEach((x, i) => {
+      const nut = this.nuts.create(x, 180 + (i % 3) * 60, 'nut');
+      nut.setBounceY(0.35);
+      nut.setDepth(5);
+    });
     this.physics.add.collider(this.nuts, this.platforms);
     this.physics.add.overlap(this.player, this.nuts, this.collectNut, null, this);
 
     this.tapes = this.physics.add.group();
-    [800, 1750, 2500].forEach(x => {
-      const tape = this.tapes.create(x, 300, 'tape');
+    [700, 1500, 2400, 3200].forEach(x => {
+      const tape = this.tapes.create(x, 250, 'tape');
       tape.setBounceY(0.3);
+      tape.setDepth(5);
     });
     this.physics.add.collider(this.tapes, this.platforms);
     this.physics.add.overlap(this.player, this.tapes, this.collectTape, null, this);
 
-    // 4. Враги (Соседи и Коты)
+    // ===== ВРАГИ =====
     this.enemies = this.physics.add.group();
-    const enemySpawns = [
-      { x: 600, type: 'enemy_neighbor' },
-      { x: 1400, type: 'enemy_cat' },
-      { x: 1800, type: 'enemy_neighbor' },
-      { x: 2100, type: 'enemy_cat' },
-      { x: 2700, type: 'enemy_neighbor' }
-    ];
 
-    enemySpawns.forEach(e => {
-      const enemy = this.enemies.create(e.x, 500, e.type);
-      enemy.setCollideWorldBounds(true);
-      enemy.setVelocityX(-100);
-      enemy.setBounce(0);
+    // Соседи
+    [600, 1300, 1700, 2500, 2800].forEach(x => {
+      const e = this.enemies.create(x, 500, 'enemy_neighbor');
+      e.setCollideWorldBounds(true);
+      e.setVelocityX(-90);
+      e.setData('type', 'neighbor');
+      e.setDepth(8);
+    });
+
+    // Коты
+    [1000, 2000, 2600].forEach(x => {
+      const e = this.enemies.create(x, 480, 'enemy_cat');
+      e.setCollideWorldBounds(true);
+      e.setVelocityX(-140);
+      e.setData('type', 'cat');
+      e.setData('jumpTimer', 0);
+      e.setDepth(8);
     });
 
     this.physics.add.collider(this.enemies, this.platforms);
     this.physics.add.overlap(this.player, this.enemies, this.handlePlayerEnemyCollision, null, this);
 
-    // 5. Босс (Труба-Моллюск)
-    this.boss = this.physics.add.sprite(3300, 500, 'boss');
+    // Летающие квитанции
+    this.bills = this.physics.add.group();
+    [1100, 1900, 2700, 3100].forEach((x, i) => {
+      const bill = this.bills.create(x, 80 + i * 30, 'enemy_bill');
+      bill.body.setAllowGravity(false);
+      bill.setVelocityY(80 + i * 20);
+      bill.setData('baseX', x);
+      bill.setDepth(7);
+    });
+    this.physics.add.overlap(this.player, this.bills, this.handlePlayerEnemyCollision, null, this);
+
+    // ===== КАПАЮЩАЯ ВОДА (зона квартиры) =====
+    this.waterDrops = this.physics.add.group();
+    this.time.addEvent({
+      delay: 900,
+      loop: true,
+      callback: () => {
+        if (this.player.x > 2550 && this.player.x < 3400) {
+          const x = 2600 + Math.random() * 700;
+          const drop = this.waterDrops.create(x, 40, 'water_drop');
+          drop.setVelocityY(220);
+          drop.body.setAllowGravity(false);
+          drop.setDepth(6);
+          this.time.delayedCall(3000, () => { if (drop.active) drop.destroy(); });
+        }
+      }
+    });
+    this.physics.add.overlap(this.player, this.waterDrops, (player, drop) => {
+      drop.destroy();
+      if (!this.isInvulnerable && !this.hasShield) {
+        this.takeDamage();
+      } else if (this.hasShield) {
+        this.hasShield = false;
+        this.hudShield.setText('');
+        this.makeInvulnerable(800);
+      }
+    }, null, this);
+
+    // ===== БОСС =====
+    this.boss = this.physics.add.sprite(3900, 480, 'boss');
     this.boss.setCollideWorldBounds(true);
-    this.boss.hp = 5;
+    this.boss.hp = 6;
     this.boss.setImmovable(true);
+    this.boss.setDepth(9);
+    this.boss.setData('attackTimer', 0);
+    this.boss.setData('phase', 1);
     this.physics.add.collider(this.boss, this.platforms);
     this.physics.add.overlap(this.player, this.boss, this.handlePlayerBossCollision, null, this);
 
-    // 6. Камера
+    this.bossProjectiles = this.physics.add.group();
+    this.physics.add.overlap(this.player, this.bossProjectiles, (player, proj) => {
+      proj.destroy();
+      if (!this.isInvulnerable) this.takeDamage();
+    }, null, this);
+
+    // ===== КАМЕРА =====
     this.cameras.main.setBounds(0, 0, mapWidth, mapHeight);
-    this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
-    this.cameras.main.setBackgroundColor('#1a237e');
+    this.cameras.main.startFollow(this.player, true, 0.09, 0.09);
 
-    // 7. Интерфейс (HUD)
-    this.hudScore = this.add.text(20, 20, 'Гайки: 0', {
-      fontSize: '26px',
-      fill: '#ffd54f',
-      fontStyle: 'bold',
-      stroke: '#000',
-      strokeThickness: 3
-    }).setScrollFactor(0);
+    // ===== HUD =====
+    const hudStyle = { fontSize: '24px', fontStyle: 'bold', stroke: '#000', strokeThickness: 4 };
 
-    this.hudHp = this.add.text(20, 55, 'Здоровье: ❤️❤️❤️', {
-      fontSize: '26px',
-      fill: '#ff1744',
-      stroke: '#000',
-      strokeThickness: 3
-    }).setScrollFactor(0);
+    this.hudScore = this.add.text(16, 14, 'Гайки: 0', { ...hudStyle, fill: '#ffd54f' }).setScrollFactor(0).setDepth(100);
+    this.hudHp = this.add.text(16, 48, '❤️❤️❤️', { ...hudStyle, fill: '#ff1744', fontSize: '28px' }).setScrollFactor(0).setDepth(100);
+    this.hudShield = this.add.text(16, 86, '', { ...hudStyle, fill: '#42a5f5', fontSize: '20px' }).setScrollFactor(0).setDepth(100);
+    this.hudZone = this.add.text(16, 116, 'Зона: Двор', { ...hudStyle, fill: '#b0bec5', fontSize: '18px' }).setScrollFactor(0).setDepth(100);
+    this.hudBoss = this.add.text(16, 146, '', { ...hudStyle, fill: '#00e676', fontSize: '20px' }).setScrollFactor(0).setDepth(100);
 
-    this.hudShield = this.add.text(20, 90, '', {
-      fontSize: '22px',
-      fill: '#2979ff',
-      fontStyle: 'bold',
-      stroke: '#000',
-      strokeThickness: 3
-    }).setScrollFactor(0);
-
-    this.hudBoss = this.add.text(20, 125, '', {
-      fontSize: '22px',
-      fill: '#00e676',
-      fontStyle: 'bold',
-      stroke: '#000',
-      strokeThickness: 3
-    }).setScrollFactor(0);
-
-    // 8. Управление
+    // ===== УПРАВЛЕНИЕ =====
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keyAttack = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.keyA = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
@@ -139,39 +247,37 @@ export default class GameScene extends Phaser.Scene {
   setupTouchUI() {
     this.touchState = { left: false, right: false, jump: false };
 
-    const btnLeft = this.add.image(90, 610, 'btn_base').setInteractive().setScrollFactor(0).setDepth(100);
-    const btnRight = this.add.image(210, 610, 'btn_base').setInteractive().setScrollFactor(0).setDepth(100);
-    const btnJump = this.add.image(1070, 610, 'btn_base').setInteractive().setScrollFactor(0).setDepth(100);
-    const btnAttack = this.add.image(1190, 610, 'btn_attack').setInteractive().setScrollFactor(0).setDepth(100);
+    const mkBtn = (x, key, label, isAttack = false) => {
+      const img = this.add.image(x, 620, isAttack ? 'btn_attack' : 'btn_base')
+        .setInteractive()
+        .setScrollFactor(0)
+        .setDepth(100)
+        .setAlpha(0.9);
+      this.add.text(x - 14, 605, label, { fontSize: '28px', fill: '#fff' })
+        .setScrollFactor(0)
+        .setDepth(101);
 
-    this.add.text(80, 595, '◄', { fontSize: '32px', fill: '#fff' }).setScrollFactor(0).setDepth(101);
-    this.add.text(200, 595, '►', { fontSize: '32px', fill: '#fff' }).setScrollFactor(0).setDepth(101);
-    this.add.text(1060, 595, '▲', { fontSize: '32px', fill: '#fff' }).setScrollFactor(0).setDepth(101);
-    this.add.text(1172, 595, '🔧', { fontSize: '32px', fill: '#fff' }).setScrollFactor(0).setDepth(101);
+      if (isAttack) {
+        img.on('pointerdown', () => this.attack());
+      } else {
+        img.on('pointerdown', () => { this.touchState[key] = true; });
+        img.on('pointerup', () => { this.touchState[key] = false; });
+        img.on('pointerout', () => { this.touchState[key] = false; });
+      }
+      return img;
+    };
 
-    btnLeft.on('pointerdown', () => { this.touchState.left = true; });
-    btnLeft.on('pointerup', () => { this.touchState.left = false; });
-    btnLeft.on('pointerout', () => { this.touchState.left = false; });
-
-    btnRight.on('pointerdown', () => { this.touchState.right = true; });
-    btnRight.on('pointerup', () => { this.touchState.right = false; });
-    btnRight.on('pointerout', () => { this.touchState.right = false; });
-
-    btnJump.on('pointerdown', () => { this.touchState.jump = true; });
-    btnJump.on('pointerup', () => { this.touchState.jump = false; });
-    btnJump.on('pointerout', () => { this.touchState.jump = false; });
-
-    btnAttack.on('pointerdown', () => this.attack());
+    mkBtn(80, 'left', '◄');
+    mkBtn(190, 'right', '►');
+    mkBtn(1080, 'jump', '▲');
+    mkBtn(1195, null, '🔧', true);
   }
 
   triggerHaptic(type = 'light') {
-    if (window.Telegram?.WebApp?.HapticFeedback) {
-      if (type === 'error') {
-        window.Telegram.WebApp.HapticFeedback.notificationOccurred('error');
-      } else {
-        window.Telegram.WebApp.HapticFeedback.impactOccurred(type);
-      }
-    }
+    const hb = window.Telegram?.WebApp?.HapticFeedback;
+    if (!hb) return;
+    if (type === 'error') hb.notificationOccurred('error');
+    else hb.impactOccurred(type);
   }
 
   attack() {
@@ -179,12 +285,13 @@ export default class GameScene extends Phaser.Scene {
     this.isAttacking = true;
     this.triggerHaptic('medium');
 
-    const offsetX = this.facing === 'right' ? 40 : -40;
-    const wrench = this.physics.add.sprite(this.player.x + offsetX, this.player.y, 'wrench');
+    const offsetX = this.facing === 'right' ? 42 : -42;
+    const wrench = this.physics.add.sprite(this.player.x + offsetX, this.player.y + 4, 'wrench');
     wrench.body.setAllowGravity(false);
-    wrench.setDepth(10);
+    wrench.setDepth(15);
+    if (this.facing === 'left') wrench.setFlipX(true);
 
-    // Удар по врагам
+    // Враги
     this.physics.add.overlap(wrench, this.enemies, (w, enemy) => {
       if (!enemy.active) return;
       enemy.destroy();
@@ -193,37 +300,49 @@ export default class GameScene extends Phaser.Scene {
       this.triggerHaptic('heavy');
     }, null, this);
 
-    // Удар по боссу
-    if (this.boss && this.boss.active) {
+    // Квитанции
+    this.physics.add.overlap(wrench, this.bills, (w, bill) => {
+      if (!bill.active) return;
+      bill.destroy();
+      this.score += 30;
+      this.hudScore.setText(`Гайки: ${this.score}`);
+      this.triggerHaptic('heavy');
+    }, null, this);
+
+    // Босс
+    if (this.boss?.active) {
       this.physics.add.overlap(wrench, this.boss, (w, boss) => {
         if (this.bossDefeated) return;
         boss.hp -= 1;
         this.triggerHaptic('heavy');
-        boss.setTint(0xff0000);
-        this.time.delayedCall(120, () => {
-          if (boss.active) boss.clearTint();
-        });
-
+        boss.setTint(0xff5252);
+        this.time.delayedCall(100, () => boss.active && boss.clearTint());
         this.hudBoss.setText(`Труба-Моллюск: ${'❤️'.repeat(Math.max(0, boss.hp))}`);
 
         if (boss.hp <= 0) {
-          this.bossDefeated = true;
-          boss.destroy();
-          this.score += 500;
-          this.hudScore.setText(`Гайки: ${this.score}`);
-          this.hudBoss.setText('ТРУБА ПОЧИНЕНА!');
-          this.cameras.main.flash(500, 0, 230, 118);
-
-          this.time.delayedCall(1500, () => {
-            this.scene.start('GameOverScene', { score: this.score, win: true });
-          });
+          this.defeatBoss();
         }
       }, null, this);
     }
 
-    this.time.delayedCall(220, () => {
-      if (wrench.active) wrench.destroy();
+    this.time.delayedCall(200, () => {
+      wrench.active && wrench.destroy();
       this.isAttacking = false;
+    });
+  }
+
+  defeatBoss() {
+    this.bossDefeated = true;
+    this.boss.destroy();
+    this.bossProjectiles.clear(true, true);
+    this.score += 500;
+    this.hudScore.setText(`Гайки: ${this.score}`);
+    this.hudBoss.setText('✅ ТРУБА ПОЧИНЕНА!');
+    this.cameras.main.flash(600, 0, 230, 118);
+    this.triggerHaptic('heavy');
+
+    this.time.delayedCall(1800, () => {
+      this.scene.start('GameOverScene', { score: this.score, win: true });
     });
   }
 
@@ -237,10 +356,8 @@ export default class GameScene extends Phaser.Scene {
   collectTape(player, tape) {
     tape.disableBody(true, true);
     this.hasShield = true;
-    this.hudShield.setText('🛡️ Изолента активна (5с)');
+    this.hudShield.setText('🛡️ Изолента (5с)');
     this.triggerHaptic('medium');
-
-    // Щит действует 5 секунд
     this.time.delayedCall(5000, () => {
       if (this.hasShield) {
         this.hasShield = false;
@@ -255,31 +372,31 @@ export default class GameScene extends Phaser.Scene {
     if (this.hasShield) {
       this.hasShield = false;
       this.hudShield.setText('');
-      this.makeInvulnerable(1000);
+      this.makeInvulnerable(900);
       enemy.destroy();
       this.score += 25;
       this.hudScore.setText(`Гайки: ${this.score}`);
       this.triggerHaptic('medium');
       return;
     }
-
     this.takeDamage();
   }
 
-  handlePlayerBossCollision(player, boss) {
+  handlePlayerBossCollision() {
     if (this.isInvulnerable || this.bossDefeated) return;
     this.takeDamage();
   }
 
   takeDamage() {
+    if (this.isInvulnerable) return;
     this.hp -= 1;
     this.updateHpUI();
     this.triggerHaptic('error');
-    this.makeInvulnerable(1500);
-    this.cameras.main.shake(200, 0.01);
+    this.makeInvulnerable(1400);
+    this.cameras.main.shake(180, 0.012);
 
     if (this.hp <= 0) {
-      this.time.delayedCall(300, () => {
+      this.time.delayedCall(250, () => {
         this.scene.start('GameOverScene', { score: this.score, win: false });
       });
     }
@@ -287,7 +404,14 @@ export default class GameScene extends Phaser.Scene {
 
   makeInvulnerable(duration) {
     this.isInvulnerable = true;
-    this.player.setAlpha(0.45);
+    this.player.setAlpha(0.4);
+    this.tweens.add({
+      targets: this.player,
+      alpha: 0.7,
+      duration: 120,
+      yoyo: true,
+      repeat: Math.floor(duration / 240)
+    });
     this.time.delayedCall(duration, () => {
       this.isInvulnerable = false;
       this.player.setAlpha(1);
@@ -295,16 +419,62 @@ export default class GameScene extends Phaser.Scene {
   }
 
   updateHpUI() {
-    const hearts = '❤️'.repeat(Math.max(0, this.hp));
-    this.hudHp.setText(`Здоровье: ${hearts || '💀'}`);
+    this.hudHp.setText('❤️'.repeat(Math.max(0, this.hp)) || '💀');
   }
 
-  update() {
+  updateZoneLabel() {
+    const x = this.player.x;
+    let label = 'Двор';
+    if (x > 3400) label = 'Засор (БОСС)';
+    else if (x > 2550) label = 'Квартира (протечка)';
+    else if (x > 1750) label = 'Лестничная клетка';
+    else if (x > 850) label = 'Подъезд';
+    this.hudZone.setText(`Зона: ${label}`);
+  }
+
+  bossAttack(time) {
+    if (!this.boss?.active || this.bossDefeated) return;
+
+    const dist = Math.abs(this.player.x - this.boss.x);
+    if (dist > 700) return;
+
+    this.boss.setData('attackTimer', this.boss.getData('attackTimer') + 16);
+
+    const timer = this.boss.getData('attackTimer');
+    const phase = this.boss.hp <= 3 ? 2 : 1;
+    const interval = phase === 2 ? 1400 : 2000;
+
+    if (timer >= interval) {
+      this.boss.setData('attackTimer', 0);
+
+      // Плевок
+      const spit = this.bossProjectiles.create(this.boss.x - 40, this.boss.y - 20, 'boss_spit');
+      spit.body.setAllowGravity(false);
+      spit.setDepth(12);
+
+      const angle = Phaser.Math.Angle.Between(spit.x, spit.y, this.player.x, this.player.y);
+      const speed = phase === 2 ? 280 : 220;
+      spit.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+
+      // Во второй фазе — второй плевок чуть выше
+      if (phase === 2) {
+        const spit2 = this.bossProjectiles.create(this.boss.x - 40, this.boss.y - 50, 'boss_spit');
+        spit2.body.setAllowGravity(false);
+        spit2.setDepth(12);
+        const a2 = angle - 0.35;
+        spit2.setVelocity(Math.cos(a2) * speed, Math.sin(a2) * speed);
+      }
+
+      this.time.delayedCall(3500, () => {
+        if (spit.active) spit.destroy();
+      });
+    }
+  }
+
+  update(time, delta) {
     if (this.bossDefeated) return;
 
-    const speed = 280;
-
-    // Движение (стрелки + WASD + тач)
+    const speed = 290;
     const left = this.cursors.left.isDown || this.keyA.isDown || this.touchState.left;
     const right = this.cursors.right.isDown || this.keyD.isDown || this.touchState.right;
     const jump = this.cursors.up.isDown || this.keyW.isDown || this.touchState.jump;
@@ -312,47 +482,83 @@ export default class GameScene extends Phaser.Scene {
     if (left) {
       this.player.setVelocityX(-speed);
       this.facing = 'left';
+      this.player.setFlipX(true);
     } else if (right) {
       this.player.setVelocityX(speed);
       this.facing = 'right';
+      this.player.setFlipX(false);
     } else {
       this.player.setVelocityX(0);
     }
 
-    // Прыжок
     if (jump && this.player.body.touching.down) {
-      this.player.setVelocityY(-580);
+      this.player.setVelocityY(-590);
       this.triggerHaptic('light');
     }
 
-    // Атака с клавиатуры
     if (Phaser.Input.Keyboard.JustDown(this.keyAttack)) {
       this.attack();
     }
 
-    // Падение в яму → потеря жизни / game over
-    if (this.player.y > 710) {
+    // Падение в яму
+    if (this.player.y > 720) {
       this.takeDamage();
       if (this.hp > 0) {
-        // Респавн чуть левее ямы
-        this.player.setPosition(Math.max(80, this.player.x - 150), 400);
+        this.player.setPosition(Math.max(100, this.player.x - 180), 380);
         this.player.setVelocity(0, 0);
       }
     }
 
-    // Простейший ИИ патрулирования врагов
+    // Движущиеся лифты
+    this.elevators.forEach(elev => {
+      const base = elev.getData('baseY');
+      const amp = elev.getData('amp');
+      const spd = elev.getData('speed');
+      const phase = elev.getData('phase');
+      elev.y = base + Math.sin(time * spd + phase) * amp;
+      elev.body.updateFromGameObject();
+    });
+
+    // Качели
+    if (this.swing) {
+      const base = this.swing.getData('baseY');
+      this.swing.y = base + Math.sin(time * 0.0015) * 40;
+      this.swing.body.updateFromGameObject();
+    }
+
+    // ИИ врагов
     this.enemies.children.iterate(enemy => {
-      if (enemy && enemy.body && enemy.active) {
-        if (enemy.body.blocked.left) {
-          enemy.setVelocityX(120);
-        } else if (enemy.body.blocked.right) {
-          enemy.setVelocityX(-120);
+      if (!enemy?.active || !enemy.body) return;
+
+      if (enemy.body.blocked.left) enemy.setVelocityX(enemy.getData('type') === 'cat' ? 150 : 100);
+      else if (enemy.body.blocked.right) enemy.setVelocityX(enemy.getData('type') === 'cat' ? -150 : -100);
+
+      // Коты иногда прыгают
+      if (enemy.getData('type') === 'cat') {
+        let jt = enemy.getData('jumpTimer') || 0;
+        jt += delta;
+        if (jt > 2200 && enemy.body.touching.down) {
+          enemy.setVelocityY(-420);
+          jt = 0;
         }
+        enemy.setData('jumpTimer', jt);
       }
     });
 
-    // Показываем HP босса, когда игрок близко
-    if (this.boss && this.boss.active && Math.abs(this.player.x - this.boss.x) < 600) {
+    // Квитанции — паттерн вверх-вниз
+    this.bills.children.iterate(bill => {
+      if (!bill?.active) return;
+      if (bill.y > 280) bill.setVelocityY(-90);
+      else if (bill.y < 60) bill.setVelocityY(110);
+      // Лёгкое покачивание по X
+      bill.x = bill.getData('baseX') + Math.sin(time * 0.002) * 30;
+    });
+
+    this.bossAttack(time);
+    this.updateZoneLabel();
+
+    // HP босса рядом
+    if (this.boss?.active && Math.abs(this.player.x - this.boss.x) < 650) {
       this.hudBoss.setText(`Труба-Моллюск: ${'❤️'.repeat(Math.max(0, this.boss.hp))}`);
     }
   }
