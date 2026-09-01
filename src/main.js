@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import BootScene from './scenes/BootScene';
 import MenuScene from './scenes/MenuScene';
 import GameScene from './scenes/GameScene';
+import Level2Scene from './scenes/Level2Scene';
 import GameOverScene from './scenes/GameOverScene';
 
 const tg = window.Telegram?.WebApp;
@@ -29,7 +30,7 @@ const config = {
       debug: false
     }
   },
-  scene: [BootScene, MenuScene, GameScene, GameOverScene]
+  scene: [BootScene, MenuScene, GameScene, Level2Scene, GameOverScene]
 };
 
 export default new Phaser.Game(config);
