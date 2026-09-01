@@ -124,6 +124,38 @@ class SoundManager {
     this._tone(600, 0.05, 'square', 0.08);
   }
 
+  footstep() {
+    this._noise(0.04, 0.06);
+    this._tone(80, 0.04, 'sine', 0.04);
+  }
+
+  drip() {
+    this._tone(900, 0.06, 'sine', 0.06, 400);
+  }
+
+  powerup() {
+    [440, 554, 659, 880].forEach((f, i) => {
+      setTimeout(() => this._tone(f, 0.1, 'triangle', 0.1), i * 70);
+    });
+  }
+
+  bubble() {
+    this._tone(320, 0.15, 'square', 0.08);
+    setTimeout(() => this._tone(280, 0.2, 'square', 0.06), 100);
+  }
+
+  breakBox() {
+    this._noise(0.12, 0.14);
+    this._tone(150, 0.1, 'sawtooth', 0.1, 60);
+  }
+
+  tapeFix() {
+    this._noise(0.2, 0.1);
+    [300, 400, 500].forEach((f, i) => {
+      setTimeout(() => this._tone(f, 0.12, 'triangle', 0.1), i * 100);
+    });
+  }
+
   toggle() {
     this.enabled = !this.enabled;
     return this.enabled;
