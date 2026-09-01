@@ -108,10 +108,11 @@ export default class GameScene extends Phaser.Scene {
     this.platforms.create(3800, 500, 'tile_pipe').setScale(2, 1).refreshBody();
 
     // ===== ИГРОК =====
-    this.player = this.physics.add.sprite(this.startX || 120, 500, 'sanych');
+    this.player = this.physics.add.sprite(this.startX || 120, 500, 'sanych_sheet', 0);
     this.player.setBounce(0.05);
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(10);
+    this.player.play('sanych_idle');
     this.physics.add.collider(this.player, this.platforms);
 
     // Коллизии с лифтами (после создания игрока)
@@ -152,21 +153,23 @@ export default class GameScene extends Phaser.Scene {
 
     // Соседи
     [600, 1300, 1700, 2500, 2800].forEach(x => {
-      const e = this.enemies.create(x, 500, 'enemy_neighbor');
+      const e = this.enemies.create(x, 500, 'neighbor_sheet', 0);
       e.setCollideWorldBounds(true);
       e.setVelocityX(-90);
       e.setData('type', 'neighbor');
       e.setDepth(8);
+      e.play('neighbor_walk');
     });
 
     // Коты
     [1000, 2000, 2600].forEach(x => {
-      const e = this.enemies.create(x, 480, 'enemy_cat');
+      const e = this.enemies.create(x, 480, 'cat_sheet', 0);
       e.setCollideWorldBounds(true);
       e.setVelocityX(-140);
       e.setData('type', 'cat');
       e.setData('jumpTimer', 0);
       e.setDepth(8);
+      e.play('cat_walk');
     });
 
     this.physics.add.collider(this.enemies, this.platforms);
@@ -515,6 +518,21 @@ export default class GameScene extends Phaser.Scene {
       this.player.setVelocityY(-590);
       this.triggerHaptic('light');
       SFX.jump();
+    }
+
+    // Анимации Саныча
+    if (!this.player.body.touching.down) {
+      if (this.player.anims.currentAnim?.key !== 'sanych_jump') {
+        this.player.play('sanych_jump', true);
+      }
+    } else if (left || right) {
+      if (this.player.anims.currentAnim?.key !== 'sanych_run') {
+        this.player.play('sanych_run', true);
+      }
+    } else {
+      if (this.player.anims.currentAnim?.key !== 'sanych_idle') {
+        this.player.play('sanych_idle', true);
+      }
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.keyAttack)) {
