@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import SFX from '../audio/SoundManager';
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -24,6 +25,7 @@ export default class GameScene extends Phaser.Scene {
 
     // ===== ФОН по зонам (цвет неба) =====
     this.cameras.main.setBackgroundColor('#1a237e');
+    this.input.once('pointerdown', () => SFX.unlock());
 
     // ===== ПЛАТФОРМЫ =====
     this.platforms = this.physics.add.staticGroup();
@@ -284,6 +286,7 @@ export default class GameScene extends Phaser.Scene {
     if (this.isAttacking || this.bossDefeated) return;
     this.isAttacking = true;
     this.triggerHaptic('medium');
+    SFX.attack();
 
     const offsetX = this.facing === 'right' ? 42 : -42;
     const wrench = this.physics.add.sprite(this.player.x + offsetX, this.player.y + 4, 'wrench');
@@ -298,6 +301,7 @@ export default class GameScene extends Phaser.Scene {
       this.score += 50;
       this.hudScore.setText(`Гайки: ${this.score}`);
       this.triggerHaptic('heavy');
+      SFX.hitEnemy();
     }, null, this);
 
     // Квитанции
@@ -307,6 +311,7 @@ export default class GameScene extends Phaser.Scene {
       this.score += 30;
       this.hudScore.setText(`Гайки: ${this.score}`);
       this.triggerHaptic('heavy');
+      SFX.hitEnemy();
     }, null, this);
 
     // Босс
@@ -315,6 +320,7 @@ export default class GameScene extends Phaser.Scene {
         if (this.bossDefeated) return;
         boss.hp -= 1;
         this.triggerHaptic('heavy');
+        SFX.bossHit();
         boss.setTint(0xff5252);
         this.time.delayedCall(100, () => boss.active && boss.clearTint());
         this.hudBoss.setText(`Труба-Моллюск: ${'❤️'.repeat(Math.max(0, boss.hp))}`);
@@ -340,6 +346,7 @@ export default class GameScene extends Phaser.Scene {
     this.hudBoss.setText('✅ ТРУБА ПОЧИНЕНА!');
     this.cameras.main.flash(600, 0, 230, 118);
     this.triggerHaptic('heavy');
+    SFX.win();
 
     this.time.delayedCall(1800, () => {
       this.scene.start('GameOverScene', { score: this.score, win: true });
@@ -351,6 +358,7 @@ export default class GameScene extends Phaser.Scene {
     this.score += 10;
     this.hudScore.setText(`Гайки: ${this.score}`);
     this.triggerHaptic('light');
+    SFX.collectNut();
   }
 
   collectTape(player, tape) {
@@ -358,6 +366,7 @@ export default class GameScene extends Phaser.Scene {
     this.hasShield = true;
     this.hudShield.setText('🛡️ Изолента (5с)');
     this.triggerHaptic('medium');
+    SFX.collectTape();
     this.time.delayedCall(5000, () => {
       if (this.hasShield) {
         this.hasShield = false;
@@ -392,6 +401,7 @@ export default class GameScene extends Phaser.Scene {
     this.hp -= 1;
     this.updateHpUI();
     this.triggerHaptic('error');
+    SFX.damage();
     this.makeInvulnerable(1400);
     this.cameras.main.shake(180, 0.012);
 
@@ -448,6 +458,7 @@ export default class GameScene extends Phaser.Scene {
       this.boss.setData('attackTimer', 0);
 
       // Плевок
+      SFX.bossSpit();
       const spit = this.bossProjectiles.create(this.boss.x - 40, this.boss.y - 20, 'boss_spit');
       spit.body.setAllowGravity(false);
       spit.setDepth(12);
@@ -494,6 +505,7 @@ export default class GameScene extends Phaser.Scene {
     if (jump && this.player.body.touching.down) {
       this.player.setVelocityY(-590);
       this.triggerHaptic('light');
+      SFX.jump();
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.keyAttack)) {
