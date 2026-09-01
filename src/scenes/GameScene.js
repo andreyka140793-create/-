@@ -57,7 +57,7 @@ export default class GameScene extends Phaser.Scene {
     // Основная земля с ямами
     for (let x = 0; x < mapWidth; x += 64) {
       // Ямы: двор→подъезд, лестница, перед боссом
-      if ((x >= 880 && x < 1080) || (x >= 1980 && x < 2140) || (x >= 3100 && x < 3260)) continue;
+      if ((x >= 920 && x < 1040) || (x >= 2000 && x < 2120) || (x >= 3120 && x < 3240)) continue;
       this.platforms.create(x + 32, 688, 'tile_ground');
     }
 
@@ -71,9 +71,10 @@ export default class GameScene extends Phaser.Scene {
     this.swing.setData('baseY', 480);
     
 
-    // Платформы двора
+    // Платформы двора + мостики у ям
     [
-      { x: 350, y: 520 }, { x: 550, y: 420 }, { x: 750, y: 340 }
+      { x: 350, y: 520 }, { x: 550, y: 420 }, { x: 750, y: 340 },
+      { x: 980, y: 560 }, { x: 2060, y: 560 }, { x: 3180, y: 560 }
     ].forEach(p => {
       this.platforms.create(p.x, p.y, 'tile_pipe').setScale(1.5, 1).refreshBody();
     });
@@ -202,7 +203,7 @@ export default class GameScene extends Phaser.Scene {
     [600, 1300, 1700, 2500, 2800].forEach(x => {
       const e = this.enemies.create(x, 500, 'neighbor_sheet', 0);
       e.setCollideWorldBounds(true);
-      e.setVelocityX(-90);
+      e.setVelocityX(-75);
       e.setData('type', 'neighbor');
       e.setData('uid', 'n' + x);
       e.setDepth(8);
@@ -213,7 +214,7 @@ export default class GameScene extends Phaser.Scene {
     [1000, 2000, 2600].forEach(x => {
       const e = this.enemies.create(x, 480, 'cat_sheet', 0);
       e.setCollideWorldBounds(true);
-      e.setVelocityX(-140);
+      e.setVelocityX(-120);
       e.setData('type', 'cat');
       e.setData('jumpTimer', 0);
       e.setDepth(8);
@@ -237,13 +238,13 @@ export default class GameScene extends Phaser.Scene {
     // ===== КАПАЮЩАЯ ВОДА (зона квартиры) =====
     this.waterDrops = this.physics.add.group();
     this.time.addEvent({
-      delay: 900,
+      delay: 1300,
       loop: true,
       callback: () => {
         if (this.player.x > 2550 && this.player.x < 3400) {
           const x = 2600 + Math.random() * 700;
           const drop = this.waterDrops.create(x, 40, 'water_drop');
-          drop.setVelocityY(220);
+          drop.setVelocityY(190);
           drop.body.setAllowGravity(false);
           drop.setDepth(6);
           if (Math.random() < 0.35) SFX.drip();
@@ -638,7 +639,7 @@ export default class GameScene extends Phaser.Scene {
     this.boss.setData('attackTimer', (this.boss.getData('attackTimer') || 0) + 16);
     const timer = this.boss.getData('attackTimer');
     const phase = this.boss.hp <= 3 ? 2 : 1;
-    const interval = phase === 2 ? 1600 : 2200;
+    const interval = phase === 2 ? 1800 : 2400;
 
     if (this.bossVulnerable) {
       this.boss.setAlpha(0.55 + Math.sin(time * 0.02) * 0.25);
@@ -765,10 +766,9 @@ export default class GameScene extends Phaser.Scene {
     this.slippery = this.player.x > 2550 && this.player.x < 3400 && onGround;
     if (this.slippery && (left || right)) {
       const vx = this.player.body.velocity.x;
-      this.player.setVelocityX(vx * 1.08);
-      // ограничение
-      if (Math.abs(this.player.body.velocity.x) > 420) {
-        this.player.setVelocityX(Math.sign(vx) * 420);
+      this.player.setVelocityX(vx * 1.04);
+      if (Math.abs(this.player.body.velocity.x) > 360) {
+        this.player.setVelocityX(Math.sign(vx) * 360);
       }
     }
 
@@ -812,12 +812,12 @@ export default class GameScene extends Phaser.Scene {
     // --- Волны квитанций в подъезде ---
     if (this.player.x > 900 && this.player.x < 1800) {
       this.billWaveTimer += delta;
-      if (this.billWaveTimer > 2800) {
+      if (this.billWaveTimer > 3600) {
         this.billWaveTimer = 0;
         for (let i = 0; i < 3; i++) {
           const bill = this.bills.create(this.player.x + 100 + i * 80, 30, 'enemy_bill');
           bill.body.setAllowGravity(false);
-          bill.setVelocityY(140 + i * 20);
+          bill.setVelocityY(120 + i * 15);
           bill.setData('baseX', bill.x);
           bill.setDepth(7);
           this.time.delayedCall(4000, () => bill.active && bill.destroy());
@@ -863,15 +863,15 @@ export default class GameScene extends Phaser.Scene {
     this.enemies.children.iterate(enemy => {
       if (!enemy?.active || !enemy.body) return;
 
-      if (enemy.body.blocked.left) enemy.setVelocityX(enemy.getData('type') === 'cat' ? 150 : 100);
-      else if (enemy.body.blocked.right) enemy.setVelocityX(enemy.getData('type') === 'cat' ? -150 : -100);
+      if (enemy.body.blocked.left) enemy.setVelocityX(enemy.getData('type') === 'cat' ? 130 : 85);
+      else if (enemy.body.blocked.right) enemy.setVelocityX(enemy.getData('type') === 'cat' ? -130 : -85);
 
       // Коты иногда прыгают
       if (enemy.getData('type') === 'cat') {
         let jt = enemy.getData('jumpTimer') || 0;
         jt += delta;
-        if (jt > 2200 && enemy.body.touching.down) {
-          enemy.setVelocityY(-420);
+        if (jt > 2800 && enemy.body.touching.down) {
+          enemy.setVelocityY(-380);
           jt = 0;
         }
         enemy.setData('jumpTimer', jt);

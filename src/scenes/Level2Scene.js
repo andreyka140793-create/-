@@ -48,16 +48,17 @@ export default class Level2Scene extends Phaser.Scene {
     this.platforms = this.physics.add.staticGroup();
     for (let x = 0; x < mapWidth; x += 64) {
       // ямы
-      if ((x >= 1000 && x < 1160) || (x >= 2100 && x < 2260) || (x >= 3000 && x < 3140)) continue;
+      if ((x >= 1020 && x < 1140) || (x >= 2120 && x < 2240) || (x >= 3020 && x < 3120)) continue;
       this.platforms.create(x + 32, 688, 'tile_grass');
     }
 
     // Грядки / заборы / крыша сарая
     [
       { x: 400, y: 520 }, { x: 600, y: 400 }, { x: 850, y: 480 },
-      { x: 1300, y: 500 }, { x: 1500, y: 380 }, { x: 1750, y: 300 },
-      { x: 2000, y: 450 }, { x: 2400, y: 400 }, { x: 2700, y: 520 },
-      { x: 2900, y: 360 }, { x: 3300, y: 480 }, { x: 3500, y: 400 }
+      { x: 1080, y: 560 }, { x: 1300, y: 500 }, { x: 1500, y: 380 },
+      { x: 1750, y: 300 }, { x: 2000, y: 450 }, { x: 2180, y: 560 },
+      { x: 2400, y: 400 }, { x: 2700, y: 520 }, { x: 2900, y: 360 },
+      { x: 3080, y: 560 }, { x: 3300, y: 480 }, { x: 3500, y: 400 }
     ].forEach(p => {
       this.platforms.create(p.x, p.y, 'tile_wood').setScale(1.6, 1).refreshBody();
     });
@@ -120,7 +121,7 @@ export default class Level2Scene extends Phaser.Scene {
     [500, 1400, 2500, 3100].forEach(x => {
       const d = this.enemies.create(x, 500, 'dog');
       d.setCollideWorldBounds(true);
-      d.setVelocityX(-110);
+      d.setVelocityX(-95);
       d.setData('type', 'dog');
       d.setDepth(8);
     });
@@ -129,7 +130,7 @@ export default class Level2Scene extends Phaser.Scene {
 
     // Комары (летающие)
     this.mosquitos = this.physics.add.group();
-    [700, 1200, 1800, 2200, 2700, 3400].forEach((x, i) => {
+    [800, 1500, 2100, 2800, 3400].forEach((x, i) => {
       const m = this.mosquitos.create(x, 120 + (i % 3) * 40, 'mosquito');
       m.body.setAllowGravity(false);
       m.setData('baseX', x);
@@ -141,12 +142,12 @@ export default class Level2Scene extends Phaser.Scene {
     // Падающие яблоки
     this.apples = this.physics.add.group();
     this.time.addEvent({
-      delay: 1600,
+      delay: 2200,
       loop: true,
       callback: () => {
         if (this.player.x > 400 && this.player.x < 3200) {
           const a = this.apples.create(this.player.x + 80 + Math.random() * 200, 20, 'apple');
-          a.setVelocityY(180);
+          a.setVelocityY(160);
           a.body.setAllowGravity(false);
           this.time.delayedCall(3500, () => a.active && a.destroy());
         }
@@ -159,7 +160,7 @@ export default class Level2Scene extends Phaser.Scene {
 
     // ===== БОСС: Септик =====
     this.boss = this.physics.add.sprite(3700, 500, 'septic_boss');
-    this.boss.hp = 7;
+    this.boss.hp = 6;
     this.boss.setImmovable(true);
     this.boss.setDepth(9);
     this.boss.setData('attackTimer', 0);
@@ -542,8 +543,8 @@ export default class Level2Scene extends Phaser.Scene {
     // Собаки патруль
     this.enemies.children.iterate(e => {
       if (!e?.active || !e.body) return;
-      if (e.body.blocked.left) e.setVelocityX(120);
-      else if (e.body.blocked.right) e.setVelocityX(-120);
+      if (e.body.blocked.left) e.setVelocityX(100);
+      else if (e.body.blocked.right) e.setVelocityX(-100);
     });
 
     // Комары — восьмёрки
