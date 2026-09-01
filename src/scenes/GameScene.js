@@ -7,7 +7,6 @@ export default class GameScene extends Phaser.Scene {
   }
 
   init(data = {}) {
-    // Поддержка продолжения после «Продолжить за Stars»
     this.score = data.score || 0;
     this.hp = data.hp || 3;
     this.startX = data.startX || 120;
@@ -19,6 +18,15 @@ export default class GameScene extends Phaser.Scene {
     this.facing = 'right';
     this.bossDefeated = false;
     this.zone = 1;
+
+    // Геймплей
+    this.coyoteTimer = 0;
+    this.jumpBufferTimer = 0;
+    this.checkpointX = this.startX;
+    this.combo = 0;
+    this.comboTimer = 0;
+    this.bossVulnerable = false;
+    this._jumpWasHeld = false;
   }
 
   create() {
@@ -30,6 +38,11 @@ export default class GameScene extends Phaser.Scene {
     // ===== ФОН по зонам (цвет неба) =====
     this.cameras.main.setBackgroundColor('#1a237e');
     this.input.once('pointerdown', () => SFX.unlock());
+
+    // Чекпоинты по зонам
+    this.checkpointZones = [
+      { x: 120 }, { x: 900 }, { x: 1800 }, { x: 2600 }, { x: 3400 }
+    ];
 
     // ===== ПЛАТФОРМЫ =====
     this.platforms = this.physics.add.staticGroup();
@@ -310,8 +323,11 @@ export default class GameScene extends Phaser.Scene {
     this.physics.add.overlap(wrench, this.enemies, (w, enemy) => {
       if (!enemy.active) return;
       enemy.destroy();
-      this.score += 50;
-      this.hudScore.setText(`Гайки: ${this.score}`);
+      this.combo = (this.combo || 0) + 1;
+      this.comboTimer = 2500;
+      const points = 50 + (this.combo - 1) * 15;
+      this.score += points;
+      this.hudScore.setText(`Гайки: ${this.score}` + (this.combo > 1 ? `  x${this.combo}` : ''));
       this.triggerHaptic('heavy');
       SFX.hitEnemy();
     }, null, this);
@@ -330,10 +346,15 @@ export default class GameScene extends Phaser.Scene {
     if (this.boss?.active) {
       this.physics.add.overlap(wrench, this.boss, (w, boss) => {
         if (this.bossDefeated) return;
-        boss.hp -= 1;
+        const dmg = this.bossVulnerable ? 2 : 1;
+        boss.hp -= dmg;
         this.triggerHaptic('heavy');
         SFX.bossHit();
         boss.setTint(0xff5252);
+        this.combo = (this.combo || 0) + 1;
+        this.comboTimer = 2500;
+        this.score += 40 * dmg;
+        this.hudScore.setText(`Гайки: ${this.score}`);
         this.time.delayedCall(100, () => boss.active && boss.clearTint());
         this.hudBoss.setText(`Труба-Моллюск: ${'❤️'.repeat(Math.max(0, boss.hp))}`);
 
@@ -409,8 +430,9 @@ export default class GameScene extends Phaser.Scene {
   }
 
   takeDamage() {
-    if (this.isInvulnerable) return;
+    if (this.isInvulnerable || this.bossDefeated) return;
     this.hp -= 1;
+    this.combo = 0;
     this.updateHpUI();
     this.triggerHaptic('error');
     SFX.damage();
@@ -419,8 +441,15 @@ export default class GameScene extends Phaser.Scene {
 
     if (this.hp <= 0) {
       this.time.delayedCall(250, () => {
-        this.scene.start('GameOverScene', { score: this.score, win: false, checkpointX: Math.max(120, this.player.x - 100) });
+        this.scene.start('GameOverScene', {
+          score: this.score,
+          win: false,
+          checkpointX: this.checkpointX
+        });
       });
+    } else {
+      this.player.setPosition(this.checkpointX, 400);
+      this.player.setVelocity(0, 0);
     }
   }
 
@@ -458,38 +487,51 @@ export default class GameScene extends Phaser.Scene {
     if (!this.boss?.active || this.bossDefeated) return;
 
     const dist = Math.abs(this.player.x - this.boss.x);
-    if (dist > 700) return;
+    if (dist > 750) return;
 
-    this.boss.setData('attackTimer', this.boss.getData('attackTimer') + 16);
-
+    this.boss.setData('attackTimer', (this.boss.getData('attackTimer') || 0) + 16);
     const timer = this.boss.getData('attackTimer');
     const phase = this.boss.hp <= 3 ? 2 : 1;
-    const interval = phase === 2 ? 1400 : 2000;
+    const interval = phase === 2 ? 1600 : 2200;
+
+    if (this.bossVulnerable) {
+      this.boss.setAlpha(0.55 + Math.sin(time * 0.02) * 0.25);
+    } else if (this.boss.active) {
+      this.boss.setAlpha(1);
+    }
 
     if (timer >= interval) {
       this.boss.setData('attackTimer', 0);
+      this.bossVulnerable = false;
 
-      // Плевок
       SFX.bossSpit();
       const spit = this.bossProjectiles.create(this.boss.x - 40, this.boss.y - 20, 'boss_spit');
       spit.body.setAllowGravity(false);
       spit.setDepth(12);
 
       const angle = Phaser.Math.Angle.Between(spit.x, spit.y, this.player.x, this.player.y);
-      const speed = phase === 2 ? 280 : 220;
-      spit.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+      const spd = phase === 2 ? 300 : 230;
+      spit.setVelocity(Math.cos(angle) * spd, Math.sin(angle) * spd);
+      this.time.delayedCall(3500, () => spit.active && spit.destroy());
 
-      // Во второй фазе — второй плевок чуть выше
       if (phase === 2) {
-        const spit2 = this.bossProjectiles.create(this.boss.x - 40, this.boss.y - 50, 'boss_spit');
+        const spit2 = this.bossProjectiles.create(this.boss.x - 40, this.boss.y - 55, 'boss_spit');
         spit2.body.setAllowGravity(false);
         spit2.setDepth(12);
-        const a2 = angle - 0.35;
-        spit2.setVelocity(Math.cos(a2) * speed, Math.sin(a2) * speed);
+        const a2 = angle - 0.4;
+        spit2.setVelocity(Math.cos(a2) * spd, Math.sin(a2) * spd);
+        this.time.delayedCall(3500, () => spit2.active && spit2.destroy());
       }
 
-      this.time.delayedCall(3500, () => {
-        if (spit.active) spit.destroy();
+      // Окно уязвимости после атаки
+      this.time.delayedCall(400, () => {
+        if (!this.bossDefeated) {
+          this.bossVulnerable = true;
+          this.time.delayedCall(1200, () => {
+            this.bossVulnerable = false;
+            if (this.boss?.active) this.boss.setAlpha(1);
+          });
+        }
       });
     }
   }
@@ -497,10 +539,22 @@ export default class GameScene extends Phaser.Scene {
   update(time, delta) {
     if (this.bossDefeated) return;
 
-    const speed = 290;
+    const speed = 300;
     const left = this.cursors.left.isDown || this.keyA.isDown || this.touchState.left;
     const right = this.cursors.right.isDown || this.keyD.isDown || this.touchState.right;
-    const jump = this.cursors.up.isDown || this.keyW.isDown || this.touchState.jump;
+    const jumpHeld = this.cursors.up.isDown || this.keyW.isDown || this.touchState.jump;
+    const jumpPressed = Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
+      Phaser.Input.Keyboard.JustDown(this.keyW) ||
+      (jumpHeld && !this._jumpWasHeld);
+    this._jumpWasHeld = jumpHeld;
+
+    const onGround = this.player.body.touching.down;
+
+    if (onGround) this.coyoteTimer = 100;
+    else this.coyoteTimer = Math.max(0, this.coyoteTimer - delta);
+
+    if (jumpPressed) this.jumpBufferTimer = 120;
+    else this.jumpBufferTimer = Math.max(0, this.jumpBufferTimer - delta);
 
     if (left) {
       this.player.setVelocityX(-speed);
@@ -511,41 +565,54 @@ export default class GameScene extends Phaser.Scene {
       this.facing = 'right';
       this.player.setFlipX(false);
     } else {
-      this.player.setVelocityX(0);
+      this.player.setVelocityX(this.player.body.velocity.x * (onGround ? 0.65 : 0.92));
     }
 
-    if (jump && this.player.body.touching.down) {
-      this.player.setVelocityY(-590);
+    // Прыжок: coyote + buffer
+    if (this.jumpBufferTimer > 0 && this.coyoteTimer > 0) {
+      this.player.setVelocityY(-600);
+      this.jumpBufferTimer = 0;
+      this.coyoteTimer = 0;
       this.triggerHaptic('light');
       SFX.jump();
     }
 
-    // Анимации Саныча
-    if (!this.player.body.touching.down) {
-      if (this.player.anims.currentAnim?.key !== 'sanych_jump') {
-        this.player.play('sanych_jump', true);
-      }
-    } else if (left || right) {
-      if (this.player.anims.currentAnim?.key !== 'sanych_run') {
-        this.player.play('sanych_run', true);
-      }
+    // Короткий прыжок при отпускании
+    if (!jumpHeld && this.player.body.velocity.y < -220) {
+      this.player.setVelocityY(this.player.body.velocity.y * 0.55);
+    }
+
+    // Анимации
+    if (!onGround) {
+      if (this.player.anims.currentAnim?.key !== 'sanych_jump') this.player.play('sanych_jump', true);
+    } else if (Math.abs(this.player.body.velocity.x) > 30) {
+      if (this.player.anims.currentAnim?.key !== 'sanych_run') this.player.play('sanych_run', true);
     } else {
-      if (this.player.anims.currentAnim?.key !== 'sanych_idle') {
-        this.player.play('sanych_idle', true);
-      }
+      if (this.player.anims.currentAnim?.key !== 'sanych_idle') this.player.play('sanych_idle', true);
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.keyAttack)) {
       this.attack();
     }
 
+    // Чекпоинты
+    if (this.checkpointZones) {
+      for (const cp of this.checkpointZones) {
+        if (this.player.x >= cp.x && cp.x > this.checkpointX) {
+          this.checkpointX = cp.x;
+        }
+      }
+    }
+
+    // Комбо-таймер
+    if (this.comboTimer > 0) {
+      this.comboTimer -= delta;
+      if (this.comboTimer <= 0) this.combo = 0;
+    }
+
     // Падение в яму
     if (this.player.y > 720) {
       this.takeDamage();
-      if (this.hp > 0) {
-        this.player.setPosition(Math.max(100, this.player.x - 180), 380);
-        this.player.setVelocity(0, 0);
-      }
     }
 
     // Движущиеся лифты
