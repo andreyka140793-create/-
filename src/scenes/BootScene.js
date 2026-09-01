@@ -47,6 +47,12 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('btn_attack', 'btn_attack.png');
     this.load.image('mailbox', 'mailbox.png');
     this.load.image('power_wrench', 'power_wrench.png');
+    this.load.image('mosquito', 'mosquito.png');
+    this.load.image('dog', 'dog.png');
+    this.load.image('septic_boss', 'septic_boss.png');
+    this.load.image('tile_grass', 'tile_grass.png');
+    this.load.image('tile_wood', 'tile_wood.png');
+    this.load.image('apple', 'apple.png');
   }
 
   create() {
@@ -390,7 +396,79 @@ export default class BootScene extends Phaser.Scene {
       g.clear();
     }
 
+    if (need('mosquito')) {
+      g.fillStyle(0x424242);
+      g.fillCircle(12, 12, 8);
+      g.fillStyle(0x212121);
+      g.fillRect(18, 10, 12, 3);
+      g.fillStyle(0x90caf9);
+      g.fillTriangle(4, 8, 0, 4, 8, 10);
+      g.fillTriangle(4, 16, 0, 20, 8, 14);
+      g.generateTexture('mosquito', 32, 24);
+      g.clear();
+    }
+
+    if (need('dog')) {
+      g.fillStyle(0x6d4c41);
+      g.fillRect(4, 16, 40, 18);
+      g.fillRect(36, 8, 16, 16);
+      g.fillStyle(0x3e2723);
+      g.fillRect(0, 20, 10, 6);
+      g.fillStyle(0xffeb3b);
+      g.fillCircle(44, 12, 2);
+      g.generateTexture('dog', 56, 36);
+      g.clear();
+    }
+
+    if (need('septic_boss')) {
+      g.fillStyle(0x5d4037);
+      g.fillRect(20, 40, 80, 70);
+      g.fillStyle(0x3e2723);
+      g.fillRect(10, 30, 100, 20);
+      g.fillStyle(0x8d6e63);
+      g.fillCircle(60, 20, 18);
+      g.fillStyle(0xff1744);
+      g.fillCircle(60, 18, 8);
+      g.fillStyle(0x33691e);
+      g.fillRect(30, 90, 20, 20);
+      g.fillRect(70, 90, 20, 20);
+      g.generateTexture('septic_boss', 120, 120);
+      g.clear();
+    }
+
+    if (need('tile_grass')) {
+      g.fillStyle(0x558b2f);
+      g.fillRect(0, 0, 64, 64);
+      g.fillStyle(0x7cb342);
+      g.fillRect(0, 0, 64, 12);
+      g.fillStyle(0x33691e);
+      for (let i = 0; i < 8; i++) g.fillRect(i * 8, 0, 3, 8 + (i % 3) * 4);
+      g.generateTexture('tile_grass', 64, 64);
+      g.clear();
+    }
+
+    if (need('tile_wood')) {
+      g.fillStyle(0x8d6e63);
+      g.fillRect(0, 0, 64, 32);
+      g.fillStyle(0x6d4c41);
+      g.fillRect(0, 14, 64, 4);
+      g.fillRect(20, 0, 3, 32);
+      g.fillRect(44, 0, 3, 32);
+      g.generateTexture('tile_wood', 64, 32);
+      g.clear();
+    }
+
+    if (need('apple')) {
+      g.fillStyle(0xe53935);
+      g.fillCircle(12, 14, 11);
+      g.fillStyle(0x43a047);
+      g.fillRect(10, 2, 4, 6);
+      g.generateTexture('apple', 24, 24);
+      g.clear();
+    }
+
     g.destroy();
   }
 }
+
 

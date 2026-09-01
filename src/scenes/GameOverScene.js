@@ -9,8 +9,8 @@ export default class GameOverScene extends Phaser.Scene {
   init(data) {
     this.finalScore = data.score || 0;
     this.isWin = data.win || false;
-    // Можно передать checkpointX для продолжения с места падения
     this.checkpointX = data.checkpointX || 120;
+    this.level = data.level || 1;
   }
 
   create() {
@@ -70,11 +70,25 @@ export default class GameOverScene extends Phaser.Scene {
     // ========== КНОПКИ ==========
     const btnY = this.isWin ? 400 : 390;
 
-    // 1. Играть снова
-    this.makeButton(width / 2, btnY, 320, 64, 0xffb300, '#000000', 'ИГРАТЬ СНОВА', () => {
-      SFX.click();
-      this.scene.start('GameScene');
-    });
+    if (this.isWin && this.level === 1) {
+      localStorage.setItem('sanych_level2', '1');
+    }
+
+    if (this.isWin && this.level === 1) {
+      this.makeButton(width / 2, btnY, 320, 64, 0x2e7d32, '#ffffff', 'УРОВЕНЬ 2: ДАЧА →', () => {
+        SFX.click();
+        this.scene.start('Level2Scene', { score: this.finalScore });
+      });
+      this.makeButton(width / 2, btnY + 75, 320, 56, 0xffb300, '#000000', 'ЕЩЁ РАЗ ХРУЩЁВКУ', () => {
+        SFX.click();
+        this.scene.start('GameScene');
+      }, 22);
+    } else {
+      this.makeButton(width / 2, btnY, 320, 64, 0xffb300, '#000000', 'ИГРАТЬ СНОВА', () => {
+        SFX.click();
+        this.scene.start(this.level === 2 ? 'Level2Scene' : 'GameScene');
+      });
+    }
 
     // 2. Только при поражении — Продолжить за Stars
     if (!this.isWin) {
@@ -89,7 +103,8 @@ export default class GameOverScene extends Phaser.Scene {
     }
 
     // 3. В меню
-    const menuY = this.isWin ? btnY + 80 : btnY + 170;
+    let menuY = this.isWin ? btnY + 80 : btnY + 170;
+    if (this.isWin && this.level === 1) menuY = btnY + 150;
     this.makeButton(width / 2, menuY, 280, 52, 0x37474f, '#ffffff', 'В ГЛАВНОЕ МЕНЮ', () => {
       SFX.click();
       this.scene.start('MenuScene');
@@ -165,8 +180,7 @@ export default class GameOverScene extends Phaser.Scene {
   }
 
   doContinue() {
-    // Продолжаем игру с 1 HP и сохранённым счётом
-    this.scene.start('GameScene', {
+    this.scene.start(this.level === 2 ? 'Level2Scene' : 'GameScene', {
       continue: true,
       score: this.finalScore,
       hp: 1,

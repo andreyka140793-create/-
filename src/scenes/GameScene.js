@@ -499,7 +499,7 @@ export default class GameScene extends Phaser.Scene {
     });
 
     this.time.delayedCall(2400, () => {
-      this.scene.start('GameOverScene', { score: this.score, win: true });
+      this.scene.start('GameOverScene', { score: this.score, win: true, level: 1 });
     });
   }
 
@@ -590,7 +590,7 @@ export default class GameScene extends Phaser.Scene {
         this.scene.start('GameOverScene', {
           score: this.score,
           win: false,
-          checkpointX: this.checkpointX
+          checkpointX: this.checkpointX, level: 1
         });
       });
     } else {
