@@ -45,6 +45,8 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('deco_swing', 'deco_swing.png');
     this.load.image('btn_base', 'btn_base.png');
     this.load.image('btn_attack', 'btn_attack.png');
+    this.load.image('mailbox', 'mailbox.png');
+    this.load.image('power_wrench', 'power_wrench.png');
   }
 
   create() {
@@ -365,6 +367,30 @@ export default class BootScene extends Phaser.Scene {
       g.clear();
     }
 
+    if (need('mailbox')) {
+      g.fillStyle(0x1565c0);
+      g.fillRect(4, 16, 40, 28);
+      g.fillStyle(0x0d47a1);
+      g.fillRect(8, 20, 32, 12);
+      g.fillStyle(0x90a4ae);
+      g.fillRect(20, 4, 8, 14);
+      g.fillStyle(0xffc107);
+      g.fillCircle(36, 30, 3);
+      g.generateTexture('mailbox', 48, 48);
+      g.clear();
+    }
+
+    if (need('power_wrench')) {
+      g.fillStyle(0xffd54f);
+      g.fillRect(4, 12, 40, 10);
+      g.fillRect(30, 4, 14, 26);
+      g.fillStyle(0xff8f00);
+      g.fillRect(32, 6, 4, 22);
+      g.generateTexture('power_wrench', 48, 32);
+      g.clear();
+    }
+
     g.destroy();
   }
 }
+

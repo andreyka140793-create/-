@@ -27,6 +27,13 @@ export default class GameScene extends Phaser.Scene {
     this.comboTimer = 0;
     this.bossVulnerable = false;
     this._jumpWasHeld = false;
+    this.hasPowerWrench = false;
+    this.powerWrenchTimer = 0;
+    this.footstepTimer = 0;
+    this.tutorialStep = 0;
+    this.slippery = false;
+    this.spokenNeighbors = new Set();
+    this.billWaveTimer = 0;
   }
 
   create() {
@@ -161,6 +168,33 @@ export default class GameScene extends Phaser.Scene {
     this.physics.add.collider(this.tapes, this.platforms);
     this.physics.add.overlap(this.player, this.tapes, this.collectTape, null, this);
 
+    // ===== ПОЧТОВЫЕ ЯЩИКИ (разрушаемые) =====
+    this.mailboxes = this.physics.add.staticGroup();
+    [1050, 1280, 1520].forEach(x => {
+      const box = this.mailboxes.create(x, 640, 'mailbox');
+      box.setDepth(4);
+      box.hp = 1;
+    });
+    this.physics.add.collider(this.player, this.mailboxes);
+
+    // ===== УСИЛЕННЫЙ КЛЮЧ (буст) =====
+    this.powerWrenches = this.physics.add.group();
+    [1600, 2900].forEach(x => {
+      const pw = this.powerWrenches.create(x, 280, 'power_wrench');
+      pw.setBounceY(0.3);
+      pw.setDepth(5);
+    });
+    this.physics.add.collider(this.powerWrenches, this.platforms);
+    this.physics.add.overlap(this.player, this.powerWrenches, this.collectPowerWrench, null, this);
+
+    // ===== СЕКРЕТНАЯ ПЛАТФОРМА + ГАЙКИ =====
+    this.platforms.create(700, 200, 'tile_pipe').setScale(1.2, 1).refreshBody();
+    for (let i = 0; i < 3; i++) {
+      const sn = this.nuts.create(680 + i * 30, 140, 'nut');
+      sn.setBounceY(0.3);
+      sn.setDepth(5);
+    }
+
     // ===== ВРАГИ =====
     this.enemies = this.physics.add.group();
 
@@ -170,6 +204,7 @@ export default class GameScene extends Phaser.Scene {
       e.setCollideWorldBounds(true);
       e.setVelocityX(-90);
       e.setData('type', 'neighbor');
+      e.setData('uid', 'n' + x);
       e.setDepth(8);
       e.play('neighbor_walk');
     });
@@ -211,6 +246,7 @@ export default class GameScene extends Phaser.Scene {
           drop.setVelocityY(220);
           drop.body.setAllowGravity(false);
           drop.setDepth(6);
+          if (Math.random() < 0.35) SFX.drip();
           this.time.delayedCall(3000, () => { if (drop.active) drop.destroy(); });
         }
       }
@@ -255,6 +291,31 @@ export default class GameScene extends Phaser.Scene {
     this.hudShield = this.add.text(16, 86, '', { ...hudStyle, fill: '#42a5f5', fontSize: '20px' }).setScrollFactor(0).setDepth(100);
     this.hudZone = this.add.text(16, 116, 'Зона: Двор', { ...hudStyle, fill: '#b0bec5', fontSize: '18px' }).setScrollFactor(0).setDepth(100);
     this.hudBoss = this.add.text(16, 146, '', { ...hudStyle, fill: '#00e676', fontSize: '20px' }).setScrollFactor(0).setDepth(100);
+    this.hudPower = this.add.text(16, 176, '', { ...hudStyle, fill: '#ffd54f', fontSize: '18px' }).setScrollFactor(0).setDepth(100);
+
+    // Полоска прогресса
+    this.progressBg = this.add.rectangle(640, 16, 280, 12, 0x000000, 0.45).setScrollFactor(0).setDepth(100);
+    this.progressFill = this.add.rectangle(500, 16, 0, 8, 0x69f0ae).setScrollFactor(0).setDepth(101).setOrigin(0, 0.5);
+    this.progressLabel = this.add.text(640, 30, 'Двор', {
+      fontSize: '14px', fill: '#b0bec5', stroke: '#000', strokeThickness: 2
+    }).setScrollFactor(0).setDepth(100).setOrigin(0.5, 0);
+
+    // Туториал
+    this.tutorialText = this.add.text(640, 680, '◄ ►  Ходи   |   ▲  Прыгай   |   🔧  Бей ключом', {
+      fontSize: '18px', fill: '#ffffff', backgroundColor: '#000000aa',
+      padding: { x: 12, y: 8 }
+    }).setScrollFactor(0).setDepth(120).setOrigin(0.5);
+
+    this.time.delayedCall(5000, () => {
+      if (this.tutorialText?.active) {
+        this.tweens.add({
+          targets: this.tutorialText,
+          alpha: 0,
+          duration: 800,
+          onComplete: () => this.tutorialText.destroy()
+        });
+      }
+    });
 
     this.updateHpUI();
     if (this.isContinue) {
@@ -313,11 +374,32 @@ export default class GameScene extends Phaser.Scene {
     this.triggerHaptic('medium');
     SFX.attack();
 
-    const offsetX = this.facing === 'right' ? 42 : -42;
-    const wrench = this.physics.add.sprite(this.player.x + offsetX, this.player.y + 4, 'wrench');
+    const powered = this.hasPowerWrench;
+    const offsetX = this.facing === 'right' ? (powered ? 55 : 42) : (powered ? -55 : -42);
+    const wrench = this.physics.add.sprite(
+      this.player.x + offsetX,
+      this.player.y + 4,
+      powered ? 'power_wrench' : 'wrench'
+    );
     wrench.body.setAllowGravity(false);
     wrench.setDepth(15);
+    if (powered) wrench.setScale(1.3);
     if (this.facing === 'left') wrench.setFlipX(true);
+
+    // Удар по почтовым ящикам
+    this.physics.add.overlap(wrench, this.mailboxes, (w, box) => {
+      if (!box.active) return;
+      SFX.breakBox();
+      // Выпадают гайки
+      for (let i = 0; i < 2; i++) {
+        const n = this.nuts.create(box.x + (i - 0.5) * 16, box.y - 10, 'nut');
+        n.setVelocity((i - 0.5) * 80, -200);
+        n.setBounce(0.4);
+      }
+      box.destroy();
+      this.score += 20;
+      this.hudScore.setText(`Гайки: ${this.score}`);
+    }, null, this);
 
     // Враги
     this.physics.add.overlap(wrench, this.enemies, (w, enemy) => {
@@ -346,7 +428,8 @@ export default class GameScene extends Phaser.Scene {
     if (this.boss?.active) {
       this.physics.add.overlap(wrench, this.boss, (w, boss) => {
         if (this.bossDefeated) return;
-        const dmg = this.bossVulnerable ? 2 : 1;
+        let dmg = this.bossVulnerable ? 2 : 1;
+        if (this.hasPowerWrench) dmg += 1;
         boss.hp -= dmg;
         this.triggerHaptic('heavy');
         SFX.bossHit();
@@ -372,16 +455,50 @@ export default class GameScene extends Phaser.Scene {
 
   defeatBoss() {
     this.bossDefeated = true;
-    this.boss.destroy();
     this.bossProjectiles.clear(true, true);
     this.score += 500;
     this.hudScore.setText(`Гайки: ${this.score}`);
-    this.hudBoss.setText('✅ ТРУБА ПОЧИНЕНА!');
-    this.cameras.main.flash(600, 0, 230, 118);
+    this.hudBoss.setText('🔧 Клеим изолентой...');
     this.triggerHaptic('heavy');
-    SFX.win();
+    SFX.tapeFix();
 
-    this.time.delayedCall(1800, () => {
+    // Анимация «заклеивания»
+    if (this.boss?.active) {
+      this.tweens.add({
+        targets: this.boss,
+        alpha: 0.3,
+        scaleX: 1.1,
+        scaleY: 0.9,
+        duration: 600,
+        yoyo: true,
+        repeat: 2,
+        onComplete: () => {
+          if (this.boss?.active) this.boss.destroy();
+        }
+      });
+    }
+
+    // Синяя «изолента» поверх
+    const tapeFx = this.add.rectangle(
+      this.boss?.x || 3900,
+      this.boss?.y || 480,
+      140, 30, 0x1565c0, 0.85
+    ).setDepth(20);
+    this.tweens.add({
+      targets: tapeFx,
+      scaleX: 1.4,
+      alpha: 0,
+      duration: 1500,
+      onComplete: () => tapeFx.destroy()
+    });
+
+    this.cameras.main.flash(400, 0, 230, 118);
+    this.time.delayedCall(900, () => {
+      this.hudBoss.setText('✅ ТРУБА ПОЧИНЕНА!');
+      SFX.win();
+    });
+
+    this.time.delayedCall(2400, () => {
       this.scene.start('GameOverScene', { score: this.score, win: true });
     });
   }
@@ -427,6 +544,35 @@ export default class GameScene extends Phaser.Scene {
   handlePlayerBossCollision() {
     if (this.isInvulnerable || this.bossDefeated) return;
     this.takeDamage();
+  }
+
+  collectPowerWrench(player, item) {
+    item.disableBody(true, true);
+    this.hasPowerWrench = true;
+    this.powerWrenchTimer = 10000;
+    this.hudPower.setText('🔧 Усиленный ключ (10с)');
+    SFX.powerup();
+    this.triggerHaptic('medium');
+  }
+
+  showSpeechBubble(enemy, text) {
+    if (!enemy?.active) return;
+    SFX.bubble();
+    const bubble = this.add.text(enemy.x, enemy.y - 50, text, {
+      fontSize: '14px',
+      fill: '#212121',
+      backgroundColor: '#fffde7',
+      padding: { x: 8, y: 4 }
+    }).setOrigin(0.5).setDepth(50);
+
+    this.tweens.add({
+      targets: bubble,
+      y: bubble.y - 20,
+      alpha: 0,
+      duration: 2200,
+      ease: 'Power2',
+      onComplete: () => bubble.destroy()
+    });
   }
 
   takeDamage() {
@@ -614,6 +760,87 @@ export default class GameScene extends Phaser.Scene {
     if (this.player.y > 720) {
       this.takeDamage();
     }
+
+    // --- Скользкий пол в квартире (2550–3400) ---
+    this.slippery = this.player.x > 2550 && this.player.x < 3400 && onGround;
+    if (this.slippery && (left || right)) {
+      const vx = this.player.body.velocity.x;
+      this.player.setVelocityX(vx * 1.08);
+      // ограничение
+      if (Math.abs(this.player.body.velocity.x) > 420) {
+        this.player.setVelocityX(Math.sign(vx) * 420);
+      }
+    }
+
+    // --- Усиленный ключ: таймер ---
+    if (this.hasPowerWrench) {
+      this.powerWrenchTimer -= delta;
+      if (this.powerWrenchTimer <= 0) {
+        this.hasPowerWrench = false;
+        this.hudPower.setText('');
+      } else {
+        this.hudPower.setText(`🔧 Усиленный ключ (${Math.ceil(this.powerWrenchTimer / 1000)}с)`);
+      }
+    }
+
+    // --- Шаги ---
+    if (onGround && Math.abs(this.player.body.velocity.x) > 40) {
+      this.footstepTimer -= delta;
+      if (this.footstepTimer <= 0) {
+        SFX.footstep();
+        this.footstepTimer = 220;
+      }
+    }
+
+    // --- Пузыри соседей ---
+    this.enemies.children.iterate(enemy => {
+      if (!enemy?.active || enemy.getData('type') !== 'neighbor') return;
+      const id = enemy.getData('uid') || enemy.x;
+      if (this.spokenNeighbors.has(id)) return;
+      if (Math.abs(this.player.x - enemy.x) < 120 && Math.abs(this.player.y - enemy.y) < 80) {
+        this.spokenNeighbors.add(id);
+        const phrases = [
+          'А разрешение получали?',
+          'Кто вам разрешил?!',
+          'ЖЭК в курсе?',
+          'Я жалобу напишу!'
+        ];
+        this.showSpeechBubble(enemy, phrases[Math.floor(Math.random() * phrases.length)]);
+      }
+    });
+
+    // --- Волны квитанций в подъезде ---
+    if (this.player.x > 900 && this.player.x < 1800) {
+      this.billWaveTimer += delta;
+      if (this.billWaveTimer > 2800) {
+        this.billWaveTimer = 0;
+        for (let i = 0; i < 3; i++) {
+          const bill = this.bills.create(this.player.x + 100 + i * 80, 30, 'enemy_bill');
+          bill.body.setAllowGravity(false);
+          bill.setVelocityY(140 + i * 20);
+          bill.setData('baseX', bill.x);
+          bill.setDepth(7);
+          this.time.delayedCall(4000, () => bill.active && bill.destroy());
+        }
+      }
+    }
+
+    // --- Капли: звук ---
+    // (капли уже спавнятся; звук при появлении добавлен в create через событие)
+
+    // --- Полоска прогресса ---
+    const mapW = 4200;
+    const prog = Phaser.Math.Clamp(this.player.x / mapW, 0, 1);
+    this.progressFill.width = 276 * prog;
+    const zones = [
+      [0, 'Двор'], [850, 'Подъезд'], [1750, 'Лестница'],
+      [2550, 'Квартира'], [3400, 'Босс']
+    ];
+    let zLabel = 'Двор';
+    for (const [x, name] of zones) {
+      if (this.player.x >= x) zLabel = name;
+    }
+    this.progressLabel.setText(zLabel);
 
     // Движущиеся лифты
     this.elevators.forEach(elev => {
