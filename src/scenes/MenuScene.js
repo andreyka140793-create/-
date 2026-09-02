@@ -66,7 +66,7 @@ export default class MenuScene extends Phaser.Scene {
       }
     });
 
-    this.soundBtn = this.add.text(width - 40, 30, '🔊', { fontSize: '32px' })
+    this.soundBtn = this.add.text(width - 40, 30, SFX.enabled ? '🔊' : '🔇', { fontSize: '32px' })
       .setOrigin(0.5).setInteractive({ useHandCursor: true });
     this.soundBtn.on('pointerdown', () => {
       const on = SFX.toggle();

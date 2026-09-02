@@ -92,7 +92,7 @@ export default class GameOverScene extends Phaser.Scene {
 
     // 2. Только при поражении — Продолжить за Stars
     if (!this.isWin) {
-      this.makeButton(width / 2, btnY + 80, 320, 64, 0x7c4dff, '#ffffff', '⭐ ПРОДОЛЖИТЬ ЗА 15', () => {
+      this.makeButton(width / 2, btnY + 80, 320, 64, 0x7c4dff, '#ffffff', '⭐ ПРОДОЛЖИТЬ (демо)', () => {
         this.tryContinueWithStars();
       });
 
@@ -110,13 +110,6 @@ export default class GameOverScene extends Phaser.Scene {
       this.scene.start('MenuScene');
     }, 22);
 
-    // Подсказка про Stars (для разработчика / MVP)
-    if (!this.isWin) {
-      this.add.text(width / 2, height - 28, 'Полная оплата Stars подключается через бота (Bot API)', {
-        fontSize: '12px',
-        fill: '#78909c'
-      }).setOrigin(0.5);
-    }
   }
 
   makeButton(x, y, w, h, color, textColor, label, onClick, fontSize = 26) {
@@ -155,7 +148,7 @@ export default class GameOverScene extends Phaser.Scene {
     // }
 
     // --- MVP / демо: локальные «звёзды» ---
-    let localStars = parseInt(localStorage.getItem('sanych_stars') || '30', 10);
+    let localStars = parseInt(localStorage.getItem('sanych_stars') || '0', 10);
 
     if (localStars >= 15) {
       localStars -= 15;
@@ -170,10 +163,10 @@ export default class GameOverScene extends Phaser.Scene {
         this.showToast('Демо: бесплатное продолжение (1 раз)');
         this.time.delayedCall(500, () => this.doContinue());
       } else {
-        this.showToast('Недостаточно Stars. Для теста: localStorage sanych_stars = 50');
+        this.showToast('Недостаточно Stars');
         // В реальном приложении здесь открывался бы инвойс
         if (tg?.showAlert) {
-          tg.showAlert('Недостаточно Stars. Оплата через бота пока не подключена.');
+          tg.showAlert('Недостаточно Stars.');
         }
       }
     }

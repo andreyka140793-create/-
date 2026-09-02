@@ -38,7 +38,7 @@ export default class GameScene extends Phaser.Scene {
 
   create() {
     const mapWidth = 4200;
-    const mapHeight = 720;
+    const mapHeight = 900; // глубже мира — чтобы можно было упасть в яму
 
     this.physics.world.setBounds(0, 0, mapWidth, mapHeight);
 
@@ -92,8 +92,8 @@ export default class GameScene extends Phaser.Scene {
     // Лифтовые платформы (движущиеся)
     this.elevators = [];
     [
-      { x: 1900, y: 500, range: 120 },
-      { x: 2200, y: 380, range: 160 },
+      { x: 1900, y: 500, amp: 120 },
+      { x: 2200, y: 380, amp: 160 },
       { x: 2450, y: 450, amp: 100 }
     ].forEach((e, i) => {
       const elev = this.physics.add.image(e.x, e.y, 'tile_pipe');
@@ -132,6 +132,7 @@ export default class GameScene extends Phaser.Scene {
     this.player = this.physics.add.sprite(this.startX || 120, 500, 'sanych_sheet', 0);
     this.player.setBounce(0.05);
     this.player.setCollideWorldBounds(true);
+    this.player.body.checkCollision.down = false; // можно упасть в яму
     this.player.setDepth(10);
     this.player.play('sanych_idle');
     this.physics.add.collider(this.player, this.platforms);
@@ -281,7 +282,7 @@ export default class GameScene extends Phaser.Scene {
     }, null, this);
 
     // ===== КАМЕРА =====
-    this.cameras.main.setBounds(0, 0, mapWidth, mapHeight);
+    this.cameras.main.setBounds(0, 0, mapWidth, 720);
     this.cameras.main.startFollow(this.player, true, 0.09, 0.09);
 
     // ===== HUD =====
@@ -331,6 +332,21 @@ export default class GameScene extends Phaser.Scene {
     this.keyW = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
 
     this.setupTouchUI();
+
+    // Сброс залипших кнопок при уходе в фон
+    this._onBlur = () => {
+      this.touchState.left = false;
+      this.touchState.right = false;
+      this.touchState.jump = false;
+    };
+    window.addEventListener('blur', this._onBlur);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') this._onBlur();
+    });
+  }
+
+  shutdown() {
+    if (this._onBlur) window.removeEventListener('blur', this._onBlur);
   }
 
   setupTouchUI() {
@@ -518,11 +534,11 @@ export default class GameScene extends Phaser.Scene {
     this.hudShield.setText('🛡️ Изолента (5с)');
     this.triggerHaptic('medium');
     SFX.collectTape();
-    this.time.delayedCall(5000, () => {
-      if (this.hasShield) {
-        this.hasShield = false;
-        this.hudShield.setText('');
-      }
+    if (this.shieldTimer) this.shieldTimer.remove(false);
+    this.shieldTimer = this.time.delayedCall(5000, () => {
+      this.hasShield = false;
+      this.hudShield.setText('');
+      this.shieldTimer = null;
     });
   }
 
@@ -630,13 +646,13 @@ export default class GameScene extends Phaser.Scene {
     this.hudZone.setText(`Зона: ${label}`);
   }
 
-  bossAttack(time) {
+  bossAttack(time, delta = 16) {
     if (!this.boss?.active || this.bossDefeated) return;
 
     const dist = Math.abs(this.player.x - this.boss.x);
     if (dist > 750) return;
 
-    this.boss.setData('attackTimer', (this.boss.getData('attackTimer') || 0) + 16);
+    this.boss.setData('attackTimer', (this.boss.getData('attackTimer') || 0) + delta);
     const timer = this.boss.getData('attackTimer');
     const phase = this.boss.hp <= 3 ? 2 : 1;
     const interval = phase === 2 ? 1800 : 2400;
@@ -757,8 +773,8 @@ export default class GameScene extends Phaser.Scene {
       if (this.comboTimer <= 0) this.combo = 0;
     }
 
-    // Падение в яму
-    if (this.player.y > 720) {
+    // Падение в яму (мир глубже камеры)
+    if (this.player.y > 780) {
       this.takeDamage();
     }
 
@@ -887,7 +903,7 @@ export default class GameScene extends Phaser.Scene {
       bill.x = bill.getData('baseX') + Math.sin(time * 0.002) * 30;
     });
 
-    this.bossAttack(time);
+    this.bossAttack(time, delta);
     this.updateZoneLabel();
 
     // HP босса рядом

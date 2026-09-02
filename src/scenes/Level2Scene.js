@@ -35,7 +35,7 @@ export default class Level2Scene extends Phaser.Scene {
 
   create() {
     const mapWidth = 4000;
-    const mapHeight = 720;
+    const mapHeight = 900;
     this.physics.world.setBounds(0, 0, mapWidth, mapHeight);
     this.cameras.main.setBackgroundColor('#4fc3f7'); // дачное небо
     this.input.once('pointerdown', () => SFX.unlock());
@@ -86,6 +86,7 @@ export default class Level2Scene extends Phaser.Scene {
     this.player = this.physics.add.sprite(this.startX, 500, 'sanych_sheet', 0);
     this.player.setBounce(0.05);
     this.player.setCollideWorldBounds(true);
+    this.player.body.checkCollision.down = false;
     this.player.setDepth(10);
     this.player.play('sanych_idle');
     this.physics.add.collider(this.player, this.platforms);
@@ -176,7 +177,7 @@ export default class Level2Scene extends Phaser.Scene {
     });
 
     // ===== КАМЕРА / HUD =====
-    this.cameras.main.setBounds(0, 0, mapWidth, mapHeight);
+    this.cameras.main.setBounds(0, 0, mapWidth, 720);
     this.cameras.main.startFollow(this.player, true, 0.09, 0.09);
 
     const st = { fontSize: '24px', fontStyle: 'bold', stroke: '#000', strokeThickness: 4 };
@@ -211,6 +212,20 @@ export default class Level2Scene extends Phaser.Scene {
     this.keyD = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
     this.keyW = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
     this.setupTouchUI();
+
+    this._onBlur = () => {
+      this.touchState.left = false;
+      this.touchState.right = false;
+      this.touchState.jump = false;
+    };
+    window.addEventListener('blur', this._onBlur);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') this._onBlur();
+    });
+  }
+
+  shutdown() {
+    if (this._onBlur) window.removeEventListener('blur', this._onBlur);
   }
 
   setupTouchUI() {
@@ -330,11 +345,11 @@ export default class Level2Scene extends Phaser.Scene {
     this.hasShield = true;
     this.hudShield.setText('🛡️ Изолента (5с)');
     SFX.collectTape();
-    this.time.delayedCall(5000, () => {
-      if (this.hasShield) {
-        this.hasShield = false;
-        this.hudShield.setText('');
-      }
+    if (this.shieldTimer) this.shieldTimer.remove(false);
+    this.shieldTimer = this.time.delayedCall(5000, () => {
+      this.hasShield = false;
+      this.hudShield.setText('');
+      this.shieldTimer = null;
     });
   }
 
@@ -398,11 +413,11 @@ export default class Level2Scene extends Phaser.Scene {
     this.hudHp.setText('❤️'.repeat(Math.max(0, this.hp)) || '💀');
   }
 
-  bossAttack(time) {
+  bossAttack(time, delta = 16) {
     if (!this.boss?.active || this.bossDefeated) return;
     if (Math.abs(this.player.x - this.boss.x) > 750) return;
 
-    this.boss.setData('attackTimer', (this.boss.getData('attackTimer') || 0) + 16);
+    this.boss.setData('attackTimer', (this.boss.getData('attackTimer') || 0) + delta);
     const timer = this.boss.getData('attackTimer');
     const phase = this.boss.hp <= 3 ? 2 : 1;
 
@@ -508,7 +523,7 @@ export default class Level2Scene extends Phaser.Scene {
       if (this.comboTimer <= 0) this.combo = 0;
     }
 
-    if (this.player.y > 720) this.takeDamage();
+    if (this.player.y > 780) this.takeDamage();
 
     if (this.hasPowerWrench) {
       this.powerWrenchTimer -= delta;
@@ -556,7 +571,7 @@ export default class Level2Scene extends Phaser.Scene {
       m.y = by + Math.cos(time * 0.003) * 30;
     });
 
-    this.bossAttack(time);
+    this.bossAttack(time, delta);
 
     // Прогресс
     const prog = Phaser.Math.Clamp(this.player.x / 4000, 0, 1);
