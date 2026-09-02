@@ -5,22 +5,30 @@
 class SoundManager {
   constructor() {
     this.ctx = null;
-    this.enabled = true;
+    this.enabled = localStorage.getItem('sanych_sound') !== '0';
     this._unlocked = false;
   }
 
   /** Вызывать после первого клика/тапа пользователя */
   unlock() {
-    if (this._unlocked) return;
     try {
+      if (this.ctx) {
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+        return;
+      }
       this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-      // Тихий буфер, чтобы разблокировать на iOS/Telegram
       const buf = this.ctx.createBuffer(1, 1, 22050);
       const src = this.ctx.createBufferSource();
       src.buffer = buf;
       src.connect(this.ctx.destination);
       src.start(0);
       this._unlocked = true;
+      // Звук после возврата из фона Telegram
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && this.ctx?.state === 'suspended') {
+          this.ctx.resume();
+        }
+      });
     } catch (e) {
       this.enabled = false;
     }
@@ -158,6 +166,7 @@ class SoundManager {
 
   toggle() {
     this.enabled = !this.enabled;
+    localStorage.setItem('sanych_sound', this.enabled ? '1' : '0');
     return this.enabled;
   }
 }
